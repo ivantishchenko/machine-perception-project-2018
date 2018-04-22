@@ -7,7 +7,7 @@ from core import BaseDataSource, BaseModel
 # import util.gaze
 
 
-class ExampleNet(BaseModel):
+class NewModel(BaseModel):
     """MnistNet architecture as used in [Zhang et al. CVPR'15]."""
 
 

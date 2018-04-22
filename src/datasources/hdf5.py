@@ -9,8 +9,8 @@ import tensorflow as tf
 from numpy.random import RandomState
 
 from core import BaseDataSource
-from util.img_transformations import crop_hand, resize, rotate, flipLR
-
+from util.img_transformations import crop_hand, resize
+# from util.img_transformations import crop_hand, resize, rotate, flipLR
 
 class HDF5Source(BaseDataSource):
     """HDF5 data loading class (using h5py)."""
