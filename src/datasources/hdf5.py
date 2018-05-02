@@ -1,4 +1,4 @@
-"""HDF5 data source for gaze estimation."""
+"""HDF5 data source for hand joint recognition."""
 from threading import Lock
 from typing import List
 
@@ -11,6 +11,7 @@ from numpy.random import RandomState
 from core import BaseDataSource
 from util.img_transformations import crop_hand, resize
 # from util.img_transformations import crop_hand, resize, rotate, flipLR
+
 
 class HDF5Source(BaseDataSource):
     """HDF5 data loading class (using h5py)."""
@@ -26,11 +27,16 @@ class HDF5Source(BaseDataSource):
         hdf5 = h5py.File(hdf_path, 'r')
         self._short_name = 'HDF:%s' % '/'.join(hdf_path.split('/')[-2:])
         if testing:
+            # Make it clear for the log-output that testing is currently
+            # performed on the data-set
             self._short_name += ':test'
 
+        # Internal logic, prevent's thread creation which sends data to GPU
+        # Also, if set to true, will not cut the hand as per given keypoints
         self.testing = testing
 
         # Random state for data augmentation
+        # TODO: Interesting to maybe adjust for our project
         self.randomState = RandomState(0)
 
         # Create global index over all specified keys
@@ -39,10 +45,15 @@ class HDF5Source(BaseDataSource):
         for key in keys_to_use:
             n = hdf5[key]['img'].shape[0]
             for i in range(n):
+                # Store a tuple of (key, index) to be able to reference the
+                # index of a specific key
                 self._index_to_key[index_counter] = (key, i)
                 index_counter += 1
+        # Return the total amount of entries, keys_to_use is implicitly
+        # obtainable
         self._num_entries = index_counter
 
+        # Reference to the opened h5 file.
         self._hdf5 = hdf5
         self._mutex = Lock()
         self._current_index = 0
@@ -110,7 +121,6 @@ class HDF5Source(BaseDataSource):
             entry['kp_2D'] = kp_2D
 
         entry['img'] = img.transpose(2,0,1)
-
 
         # Ensure all values in an entry are 4-byte floating point numbers
         for key, value in entry.items():

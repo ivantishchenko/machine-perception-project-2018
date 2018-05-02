@@ -4,6 +4,10 @@ import argparse
 import coloredlogs
 import tensorflow as tf
 
+# HYPER PARAMETER TUNINGS HERE
+BATCHSIZE = 32
+EPOCHS = 50
+
 
 if __name__ == '__main__':
 
@@ -21,36 +25,26 @@ if __name__ == '__main__':
     # Initialize Tensorflow session
     tf.logging.set_verbosity(tf.logging.INFO)
     gpu_options = tf.GPUOptions(allow_growth=True)
+    # gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.8)
     with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as session:
 
         # Declare some parameters
-        batch_size = 32
+        batch_size = BATCHSIZE
 
         # Define model
         from datasources import HDF5Source
-        from models import ExampleNet
-        model = ExampleNet(
-            # Tensorflow session
+        from models import SegmentNet
+        model = SegmentNet(
             # Note: The same session must be used for the model and the data sources.
             session,
 
-            # The learning schedule describes in which order which part of the network should be
-            # trained and with which learning rate.
-            #
-            # A standard network would have one entry (dict) in this argument where all model
-            # parameters are optimized. To do this, you must specify which variables must be
-            # optimized and this is done by specifying which prefixes to look for.
-            # The prefixes are defined by using `tf.variable_scope`.
-            #
-            # The loss terms which can be specified depends on model specifications, specifically
-            # the `loss_terms` output of `BaseModel::build_model`.
             learning_schedule=[
                 {
                     'loss_terms_to_optimize': {
-                        'kp_2D_mse': ['conv', 'fc'],
+                        'kp_2D_mse': ['handseg', 'fc'],
                     },
                     'metrics': ['kp_2D_mse'],
-                    'learning_rate': 1e-4,
+                    'learning_rate': 1e-5,
                 },
             ],
 
@@ -81,7 +75,7 @@ if __name__ == '__main__':
 
         # Train this model for a set number of epochs
         model.train(
-            num_epochs=50,
+            num_epochs=EPOCHS,
         )
 
         # Test for Kaggle submission

@@ -267,6 +267,7 @@ class BaseModel(object):
 
         logger.info('Evaluating %d batches for Kaggle submission.' % num_batches)
         for i in range(num_batches):
+            print("Got to batch {}".format(i))
             a = i * batch_size
             z = min(a + batch_size, num_entries)
             current_batch_size = z - a

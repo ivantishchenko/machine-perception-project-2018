@@ -12,4 +12,5 @@
 
 from .example import ExampleNet
 from .ivan import NewModel
+from .mickey import SegmentNet
 __all__ = ('ExampleNet', 'NewModel')

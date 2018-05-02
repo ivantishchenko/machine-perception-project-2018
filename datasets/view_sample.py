@@ -2,10 +2,11 @@ import h5py
 import numpy
 import matplotlib.pyplot as plt
 
-f = h5py.File('../../training.h5', 'r')
+f = h5py.File('training.h5', 'r')
 n_samples = len(f['train']['img'])
 colours={0:'black', 1:'blue', 2:'orange', 3:'green', 4:'red', 5:'yellow'}
 
+print("{} samples in the set to display\n".format(n_samples))
 for i in range(n_samples):
     img = f['train']['img'][i]
     kp_2D = f['train']['kp_2D'][i]
