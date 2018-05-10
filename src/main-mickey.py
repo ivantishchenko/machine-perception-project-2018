@@ -41,7 +41,7 @@ if __name__ == '__main__':
             learning_schedule=[
                 {
                     'loss_terms_to_optimize': {
-                        'kp_2D_mse': ['handseg', 'fc'],
+                        'kp_2D_mse': ['keypoints', 'fully_connected'],
                     },
                     'metrics': ['kp_2D_mse'],
                     'learning_rate': 1e-5,
@@ -55,7 +55,7 @@ if __name__ == '__main__':
                 'real': HDF5Source(
                     session,
                     batch_size,
-                    hdf_path='../datasets/dataset.h5',
+                    hdf_path='../datasets/training.h5',
                     keys_to_use=['train'],
                     min_after_dequeue=2000,
                 ),

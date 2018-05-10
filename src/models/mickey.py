@@ -21,18 +21,6 @@ class Glover(BaseModel):
         keypoints = input_tensors['kp_2D']
         print('keypoint_dims={}'.format(keypoints.get_shape()))
 
-        # with tf.variable_score('preproc'):
-        #     """
-        #     Here general pre-processing steps are done on the network such as
-        #     data augmentation by changing the hue and contrast augmentations.
-        #     Additionally the crops given as input
-        #     """
-        #
-        # with tf.variable_score('handseg'):
-        #     scoremap_list = list()
-        #     layer_per_block = [2, 2, 4, 5]
-
-
         with tf.variable_scope('keypoints'):
             scoremap_list = list()
             layers_per_block = [2, 2, 4, 5]
@@ -42,23 +30,13 @@ class Glover(BaseModel):
             image = rgb_image
             for block_id, (layer_num, chan_num, pool) in enumerate(zip(layers_per_block, out_chan_list, pool_list), 1):
                 for layer_id in range(layer_num):
-                    print('conv{}_{}: input_dims={}'.format(block_id, layer_id+1, image.get_shape()))
+                    # print('conv{}_{}: input_dims={}'.format(block_id, layer_id+1, image.get_shape()))
                     image = ops.conv_relu(image, 'conv%d_%d' % (block_id, layer_id+1), kernel_size=3, out_chan=chan_num, maxpool=(True if layer_id == range(layer_num)[-1] and pool else False), trainable=TRAIN)
                     print('conv{}_{}: output_dims={}'.format(block_id, layer_id+1, image.get_shape()))
 
             copy_image = image
 
-            # print('conv4_E: input_dims{}'.format(image.get_shape()))
-            # encoding = ops.conv_relu(image, 'conv4_E', kernel_size=3, out_chan=64, trainable=TRAIN)
-            # print('conv4_E: output_dims{}'.format(encoding.get_shape()))
-
-            # use encoding to detect initial scoremap
-            # print('conv5_1: input_dims={}'.format(encoding.get_shape()))
-            # image = ops.conv_relu(encoding, 'conv5_1', kernel_size=1, out_chan=256, trainable=TRAIN)
-            # copy_image = image
-            # print('conv5_1: output_dims={}'.format(image.get_shape()))
-            print('conv4_6: input_dims={}'.format(image.get_shape()))
-            scoremap = ops.conv(image, 'conv4_6', kernel_size=1, out_chan=KEYPOINT_COUNT, trainable=TRAIN)
+            scoremap = ops.conv(image, kernel_size=1, out_chan=KEYPOINT_COUNT, name='conv4_6', trainable=TRAIN)
             print('conv4_6: output_dims={}'.format(scoremap.get_shape()))
             scoremap_list.append(scoremap)
 
@@ -71,25 +49,31 @@ class Glover(BaseModel):
                 if len(scoremap_list) > 1:
                     image = tf.concat([scoremap_list[1], image], 1)
                 for rec_id in range(layers_per_recurrent_unit):
-                    print('conv{}_{}: input_dims={}'.format(pass_id + offset, rec_id+1, image.get_shape()))
+                    # print('conv{}_{}: input_dims={}'.format(pass_id + offset, rec_id+1, image.get_shape()))
                     image = ops.conv_relu(image, 'conv%d_%d' % (pass_id + offset, rec_id+1), kernel_size=5, out_chan=64, trainable=TRAIN)
                     print('conv{}_{}: output_dims={}'.format(pass_id + offset, rec_id+1, image.get_shape()))
-                print('conv{}_6: input_dims={}'.format(pass_id + offset, image.get_shape()))
+                # print('conv{}_6: input_dims={}'.format(pass_id + offset, image.get_shape()))
                 image = ops.conv_relu(image, 'conv%d_6' % (pass_id + offset), kernel_size=1, out_chan=64, trainable=TRAIN)
                 print('conv{}_6: output_dims={}'.format(pass_id + offset, image.get_shape()))
-                print('conv{}_7: input_dims={}'.format(pass_id + offset, image.get_shape()))
-                scoremap = ops.conv(image, 'conv%d_7' % (pass_id + offset), kernel_size=1, out_chan=KEYPOINT_COUNT, trainable=TRAIN)
+                # print('conv{}_7: input_dims={}'.format(pass_id + offset, image.get_shape()))
+                scoremap = ops.conv(image, kernel_size=1, out_chan=KEYPOINT_COUNT, name='conv%d_7' % (pass_id + offset), trainable=TRAIN)
                 print('conv{}_7: output_dims={}'.format(pass_id + offset, scoremap.get_shape()))
                 scoremap_list.append(scoremap)
 
             image = tf.concat([scoremap_list[0], scoremap_list[1], scoremap_list[2]], 1)
             print('final: output_dims={}'.format(image.get_shape()))
 
-        with tf.variable_scope('fc'):
+        with tf.variable_scope('fully_connected'):
             predictions = tf.contrib.layers.flatten(image)
             print('pred: flat_dims={}'.format(predictions.get_shape()))
 
-            predictions = ops.fc_lru(predictions, "FC_LRU1", out_chan=2*KEYPOINT_COUNT, trainable=True)
+            predictions = ops.fc_lru(predictions, layer_name='full_conn1', out_chan=1024, trainable=TRAIN)
+            print('pred: fc_dims={}'.format(predictions.get_shape()))
+
+            predictions = ops.fc_lru(predictions, layer_name='full_conn2', out_chan=512, trainable=TRAIN)
+            print('pred: fc_dims={}'.format(predictions.get_shape()))
+
+            predictions = ops.fc_lru(predictions, layer_name='prediction', out_chan=2*KEYPOINT_COUNT, disable_dropout=True, trainable=TRAIN)
             print('pred: fc_dims={}'.format(predictions.get_shape()))
 
             predictions = tf.reshape(predictions, (-1, KEYPOINT_COUNT, 2))

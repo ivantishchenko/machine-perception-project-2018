@@ -11,13 +11,13 @@ class NetworkOps(object):
     SEED = 42
 
     @classmethod
-    def leaky_relu(cls, tensor, name='lReLU'):
+    def leaky_relu(cls, tensor, name='leaky_relu'):
         return tf.nn.leaky_relu(tensor, cls.SLOPE_LRU, name=name)
 
     @classmethod
-    def conv(cls, in_tensor, name, kernel_size, out_chan, stride=1, trainable=True):
+    def conv(cls, tensor, kernel_size, out_chan, stride=1, name='conv2d', trainable=True):
         return tf.layers.conv2d(
-            inputs=in_tensor,
+            inputs=tensor,
             filters=out_chan,
             kernel_size=kernel_size,
             strides=(stride, stride),
@@ -39,9 +39,9 @@ class NetworkOps(object):
         )
 
     @classmethod
-    def max_pool(cls, in_tensor, name='pool'):
+    def max_pool(cls, tensor, name='max_pool'):
         return tf.layers.max_pooling2d(
-            inputs=in_tensor,
+            inputs=tensor,
             pool_size=(2, 2),
             strides=(2, 2),
             padding='same',
@@ -50,9 +50,9 @@ class NetworkOps(object):
         )
 
     @classmethod
-    def batch_normalization(cls, in_tensor, name='batch_norm', trainable=True):
+    def batch_normalization(cls, tensor, name='batch_norm', trainable=True):
         return tf.layers.batch_normalization(
-            inputs=in_tensor,
+            inputs=tensor,
             axis=cls.CHANNEL_AXIS,
             momentum=0.99,
             epsilon=0.001,
@@ -79,10 +79,14 @@ class NetworkOps(object):
         )
 
     @classmethod
-    def dropout(cls, in_tensor, name='drop_single', trainable=True):
+    def dropout(cls, tensor, rate=-1, name='dropout', trainable=True):
+        if rate == -1:
+            droprate = cls.DROPOUT
+        else:
+            droprate = rate
         return tf.layers.dropout(
-            in_tensor,
-            rate=cls.DROPOUT,
+            tensor,
+            rate=droprate,
             noise_shape=None,
             seed=cls.SEED,
             training=trainable,
@@ -90,15 +94,11 @@ class NetworkOps(object):
         )
 
     @classmethod
-    def dropout_layer(cls):
-        return 0
-
-    @classmethod
-    def fully_connected(cls, in_tensor, name, out_chan, activation_fun=None, trainable=True):
+    def fully_connected(cls, tensor, out_chan, activation_fun=None, name='full_conn', trainable=True):
         if activation_fun is tf.nn.leaky_relu:
             return tf.nn.leaky_relu(
                 tf.contrib.layers.fully_connected(
-                    inputs=in_tensor,
+                    inputs=tensor,
                     num_outputs=out_chan,
                     activation_fn=None,
                     normalizer_fn=None,
@@ -118,7 +118,7 @@ class NetworkOps(object):
             )
         else:
             return tf.contrib.layers.fully_connected(
-                inputs=in_tensor,
+                inputs=tensor,
                 num_outputs=out_chan,
                 activation_fn=activation_fun,
                 normalizer_fn=None,
@@ -136,22 +136,22 @@ class NetworkOps(object):
 
     @classmethod
     def conv_relu(cls, in_tensor, layer_name, kernel_size, out_chan, maxpool=False, stride=1, trainable=True):
-        tensor = cls.conv(in_tensor, layer_name, kernel_size, out_chan, stride, trainable)
-        if maxpool:
-            name = layer_name + '_pool'
-            tensor = cls.max_pool(tensor, name=name)
-            name = layer_name + '_relu'
-            out_tensor = cls.leaky_relu(tensor, name=name)
-        else:
-            name = layer_name + '_batch_norm'
-            tensor = cls.batch_normalization(in_tensor, name=name, trainable=trainable)
-            name = layer_name + '_relu'
-            tensor = cls.leaky_relu(tensor, name=name)
-            name = layer_name + '_dropout'
-            out_tensor = cls.dropout(tensor, name, trainable)
-        return out_tensor
+        with tf.variable_scope(layer_name):
+            tensor = cls.conv(tensor=in_tensor, kernel_size=kernel_size, out_chan=out_chan, stride=stride, name='conv2d', trainable=trainable)
+            if maxpool:
+                # maxpool(relu(input)) == relu(maxpool(input)); this ordering is a tiny opt which is not general https://github.com/tensorflow/tensorflow/issues/3180#issuecomment-288389772
+                tensor = cls.max_pool(tensor=tensor)
+                tensor = cls.leaky_relu(tensor=tensor)
+            else:
+                tensor = cls.leaky_relu(tensor=tensor)
+                tensor = cls.batch_normalization(tensor, trainable=trainable)  # https://github.com/ducha-aiki/caffenet-benchmark/blob/master/batchnorm.md
+                tensor = cls.dropout(tensor=tensor, trainable=trainable)
+            return tensor
 
     @classmethod
-    def fc_lru(cls, in_tensor, layer_name, out_chan, trainable=True):
-        tensor = cls.fully_connected(in_tensor, layer_name, out_chan, tf.nn.leaky_relu, trainable)
-        return cls.dropout(tensor, layer_name + '_drop', trainable)
+    def fc_lru(cls, in_tensor, layer_name, out_chan, droprate=0.5, disable_dropout=False, trainable=True):
+        with tf.variable_scope(layer_name):
+            tensor = cls.fully_connected(tensor=in_tensor, out_chan=out_chan, activation_fun=tf.nn.leaky_relu, trainable=trainable)
+            if not disable_dropout:
+                tensor = cls.dropout(tensor=tensor, rate=droprate, trainable=trainable)
+            return tensor
