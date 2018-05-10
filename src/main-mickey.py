@@ -6,7 +6,7 @@ import tensorflow as tf
 
 # HYPER PARAMETER TUNINGS HERE
 BATCHSIZE = 32
-EPOCHS = 50
+EPOCHS = 25
 
 
 if __name__ == '__main__':
@@ -33,8 +33,8 @@ if __name__ == '__main__':
 
         # Define model
         from datasources import HDF5Source
-        from models import SegmentNet
-        model = SegmentNet(
+        from models import Glover
+        model = Glover(
             # Note: The same session must be used for the model and the data sources.
             session,
 
@@ -55,19 +55,19 @@ if __name__ == '__main__':
                 'real': HDF5Source(
                     session,
                     batch_size,
-                    hdf_path='../datasets/training.h5',
+                    hdf_path='../datasets/dataset.h5',
                     keys_to_use=['train'],
                     min_after_dequeue=2000,
                 ),
             },
-            # If you want to validate your model, split the training set into
-            # training and validation and uncomment this line
+
+            # TODO: Fix validation part of framework. It's broken, gives incorrect image dimensions
             # test_data={
             #     'real': HDF5Source(
             #         session,
             #         batch_size,
-            #         hdf_path='../datasets/validation.h5',
-            #         keys_to_use=['test'],
+            #         hdf_path='../datasets/dataset.h5',
+            #         keys_to_use=['validate'],
             #         testing=True,
             #     ),
             # },
