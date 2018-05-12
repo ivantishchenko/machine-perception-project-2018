@@ -39,6 +39,29 @@ class NetworkOps(object):
         )
 
     @classmethod
+    def upconv(cls, tensor, kernel_size, out_chan, stride=1, name='conv2d_t', trainable=True):
+        return tf.layers.conv2d_transpose(
+            inputs=tensor,
+            filters=out_chan,
+            kernel_size=kernel_size,
+            strides=(stride, stride),
+            padding='valid',
+            data_format='channels_first',
+            activation=None,
+            use_bias=True,
+            kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d(),
+            bias_initializer=tf.constant_initializer(1e-4),
+            kernel_regularizer=None,
+            bias_regularizer=None,
+            activity_regularizer=None,
+            kernel_constraint=None,
+            bias_constraint=None,
+            trainable=trainable,
+            name=name,
+            reuse=None
+        )
+
+    @classmethod
     def max_pool(cls, tensor, name='max_pool'):
         return tf.layers.max_pooling2d(
             inputs=tensor,
