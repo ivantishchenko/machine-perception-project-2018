@@ -6,7 +6,7 @@ import tensorflow as tf
 
 # HYPER PARAMETER TUNINGS HERE
 BATCHSIZE = 32
-EPOCHS = 25
+EPOCHS = 10
 
 
 if __name__ == '__main__':
@@ -41,14 +41,15 @@ if __name__ == '__main__':
             learning_schedule=[
                 {
                     'loss_terms_to_optimize': {
-                        'kp_2D_mse': ['keypoints', 'loss_calculation', 'upscale_pred', 'point_pred'],
+                        'kp_mse_filter': ['keypoints', 'upscale_pred', 'point_pred', 'loss_calculation'],
+                        # Repeat the above for the lower lossterm to be calculated!
                     },
-                    'metrics': ['kp_2D_mse'],
-                    'learning_rate': 1e-5,
+                    'metrics': ['kp_mse_filter', 'kp_mse_scaled'],
+                    'learning_rate': 1e-4,
                 },
             ],
 
-            test_losses_or_metrics=['kp_2D_mse'],
+            test_losses_or_metrics=['kp_mse_filter'],
 
             # Data sources for training and testing.
             train_data={

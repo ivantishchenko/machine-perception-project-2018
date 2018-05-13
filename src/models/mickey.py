@@ -24,18 +24,25 @@ class Glover(BaseModel):
         print('rgb_image_dims={}'.format(rgb_image.get_shape()))
         keypoints = input_tensors['kp_2D']
         print('keypoint_dims={}'.format(keypoints.get_shape()))
-        heatmap_keypoints, _ = tf.map_fn(lambda i: iop.get_single_heatmap(i, HEATMAP_SIZE, 1.0, CROP_SIZE // HEATMAP_SIZE), tf.nn.embedding_lookup(keypoints, np.array(range(keypoints.shape[0]))),
-                                         dtype=([tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
-                                             tf.float32,
-                                             tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
-                                             tf.float32,
-                                             tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
-                                             tf.float32,
-                                             ], tf.float32),
-                                         back_prop=False)
-        heatmap_keypoints = tf.stack(heatmap_keypoints)
-        heatmap_keypoints = tf.transpose(heatmap_keypoints, perm=[1, 0, 2, 3])
-        print('heatmap_dims={}'.format(heatmap_keypoints))
+        hm_gt, _ = tf.map_fn(lambda i: iop.get_single_heatmap(i, HEATMAP_SIZE, 1.0, CROP_SIZE // HEATMAP_SIZE, True),
+                             tf.nn.embedding_lookup(keypoints, np.array(range(keypoints.shape[0]))),
+                             dtype=([tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
+                                    tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
+                                    tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
+                                    ], tf.float32),
+                             back_prop=False)
+        hm_gt = tf.stack(hm_gt)
+        hm_gt = tf.transpose(hm_gt, perm=[1, 0, 2, 3])
+        print('heatmap_dims={}'.format(hm_gt))
+        # hm_gt_fs, _ = tf.map_fn(lambda i: iop.get_single_heatmap(i, CROP_SIZE, 1.0, CROP_SIZE // CROP_SIZE),
+        #                         tf.nn.embedding_lookup(keypoints, np.array(range(keypoints.shape[0]))),
+        #                         dtype=([tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
+        #                                 tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
+        #                                 tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
+        #                                 ], tf.float32),
+        #                         back_prop=False)
+        # hm_gt_fs = tf.stack(hm_gt_fs)
+        # hm_gt_fs = tf.transpose(hm_gt_fs, perm=[1, 0, 2, 3])
 
         with tf.variable_scope('keypoints'):
             layers_per_block = [2, 2, 4, 5]
@@ -64,21 +71,13 @@ class Glover(BaseModel):
             for pass_id in range(num_recurrent_units):
                 image = tf.concat([scoremap_list[-1], downsampled_map], 1)
                 for rec_id in range(layers_per_recurrent_unit):
-                    print('conv{}_{}: input_dims={}'.format(pass_id + offset, rec_id+1, image.get_shape()))
                     image = nop.conv_relu(image, 'conv%d_%d' % (pass_id + offset, rec_id + 1), kernel_size=5, out_chan=64, trainable=TRAIN)
                     print('conv{}_{}: output_dims={}'.format(pass_id + offset, rec_id+1, image.get_shape()))
-                # print('conv{}_6: input_dims={}'.format(pass_id + offset, image.get_shape()))
                 image = nop.conv_relu(image, 'conv%d_%d' % (pass_id + offset, layers_per_recurrent_unit + 1), kernel_size=1, out_chan=64, trainable=TRAIN)
                 print('conv{}_{}: output_dims={}'.format(pass_id + offset, layers_per_recurrent_unit+1, image.get_shape()))
-                # print('conv{}_7: input_dims={}'.format(pass_id + offset, image.get_shape()))
                 scoremap = nop.conv(image, kernel_size=1, out_chan=KEYPOINT_COUNT, name='conv%d_P' % (pass_id + offset), trainable=TRAIN)
                 print('conv{}_P: output_dims={}'.format(pass_id + offset, scoremap.get_shape()))
                 scoremap_list.append(scoremap)
-            print('final: {}'.format(scoremap_list))
-
-        # TODO: Fix this; returns values too small imho
-        with tf.variable_scope('loss_calculation'):
-            loss = (HEATMAP_SIZE ** 2) * tf.losses.mean_squared_error(heatmap_keypoints, scoremap_list[-1])
 
         with tf.variable_scope('upscale_pred'):
             pred_upscale = scoremap_list[-1]
@@ -98,14 +97,19 @@ class Glover(BaseModel):
 
             def outer(t):
                 res = tf.map_fn(lambda j: image_max(j), tf.nn.embedding_lookup(t, np.array(range(input.shape[1]))),
-                                dtype=(tf.float32, tf.float32), back_prop=TRAIN)
+                                dtype=(tf.float32, tf.float32), back_prop=False)
                 return tf.stack([res[0], res[1]], axis=1)
 
             pred_points = tf.map_fn(lambda i: outer(i), tf.nn.embedding_lookup(input, np.array(range(input.shape[0]))),
-                                    dtype=tf.float32, back_prop=TRAIN)
+                                    dtype=tf.float32, back_prop=False)
+
+        with tf.variable_scope('loss_calculation'):
+            loss_filter = (HEATMAP_SIZE ** 2) * tf.losses.mean_squared_error(hm_gt, scoremap_list[-1])
+            loss_scaled = tf.losses.mean_squared_error(keypoints, pred_points)
 
         loss_terms = {  # To optimize
-            'kp_2D_mse': loss
+            'kp_mse_filter': loss_filter,
+            'kp_mse_scaled': loss_scaled
         }
         # Return output_tensor, loss_tensor and metrics (not used)
         return {'kp_2D': pred_points}, loss_terms, {}
