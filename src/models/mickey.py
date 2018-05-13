@@ -7,7 +7,7 @@ from util.common_ops import NetworkOps as nop
 from util.common_ops import ImageOps as iop
 
 # HYPER PARAMETERS
-CROPSIZE = 128
+CROP_SIZE = 128
 KEYPOINT_COUNT = 21
 HEATMAP_SIZE = 16
 TRAIN = True
@@ -24,15 +24,15 @@ class Glover(BaseModel):
         print('rgb_image_dims={}'.format(rgb_image.get_shape()))
         keypoints = input_tensors['kp_2D']
         print('keypoint_dims={}'.format(keypoints.get_shape()))
-        heatmap_keypoints, _ = tf.map_fn(lambda i: iop.get_single_heatmap(i, HEATMAP_SIZE, 1.0, CROPSIZE // HEATMAP_SIZE), tf.nn.embedding_lookup(keypoints, np.array(range(keypoints.shape[0]))),
-                                      dtype=([tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
+        heatmap_keypoints, _ = tf.map_fn(lambda i: iop.get_single_heatmap(i, HEATMAP_SIZE, 1.0, CROP_SIZE // HEATMAP_SIZE), tf.nn.embedding_lookup(keypoints, np.array(range(keypoints.shape[0]))),
+                                         dtype=([tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
                                              tf.float32,
                                              tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
                                              tf.float32,
                                              tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
                                              tf.float32,
                                              ], tf.float32),
-                                      back_prop=False)
+                                         back_prop=False)
         heatmap_keypoints = tf.stack(heatmap_keypoints)
         heatmap_keypoints = tf.transpose(heatmap_keypoints, perm=[1, 0, 2, 3])
         print('heatmap_dims={}'.format(heatmap_keypoints))
@@ -78,15 +78,12 @@ class Glover(BaseModel):
 
         # TODO: Fix this; returns values too small imho
         with tf.variable_scope('loss_calculation'):
-            print(scoremap_list[-1])
-            print(heatmap_keypoints)
-            loss = tf.losses.mean_squared_error(heatmap_keypoints, scoremap_list[-1])
-            print(loss)
+            loss = (HEATMAP_SIZE ** 2) * tf.losses.mean_squared_error(heatmap_keypoints, scoremap_list[-1])
 
         with tf.variable_scope('upscale_pred'):
             pred_upscale = scoremap_list[-1]
             pred_upscale = tf.transpose(pred_upscale, [0, 2, 3, 1])
-            pred_upscale = tf.image.resize_images(pred_upscale, (CROPSIZE, CROPSIZE), method=tf.image.ResizeMethod.BICUBIC, align_corners=True)
+            pred_upscale = tf.image.resize_images(pred_upscale, (CROP_SIZE, CROP_SIZE), method=tf.image.ResizeMethod.BICUBIC, align_corners=True)
             pred_upscale = tf.transpose(pred_upscale, [0, 3, 1, 2])
 
         with tf.variable_scope('point_pred'):
@@ -95,8 +92,8 @@ class Glover(BaseModel):
             def image_max(t):
                 t = tf.reshape(t, [-1])
                 idx = tf.argmax(t)
-                x = tf.cast(idx % CROPSIZE, dtype=tf.float32)
-                y = tf.cast(idx // CROPSIZE, dtype=tf.float32)
+                x = tf.cast(idx % CROP_SIZE, dtype=tf.float32)
+                y = tf.cast(idx // CROP_SIZE, dtype=tf.float32)
                 return x, y
 
             def outer(t):
@@ -108,7 +105,7 @@ class Glover(BaseModel):
                                     dtype=tf.float32, back_prop=TRAIN)
 
         loss_terms = {  # To optimize
-            'kp_2D_mse': tf.reduce_mean(tf.squared_difference(scoremap_list[-1], heatmap_keypoints)),
+            'kp_2D_mse': loss
         }
         # Return output_tensor, loss_tensor and metrics (not used)
         return {'kp_2D': pred_points}, loss_terms, {}
