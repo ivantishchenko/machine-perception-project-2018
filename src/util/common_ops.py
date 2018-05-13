@@ -11,6 +11,13 @@ class NetworkOps(object):
     SEED = 42
 
     @classmethod
+    def scale_layer(cls, tensor, chan_num):
+        with tf.variable_scope("scale", reuse=tf.AUTO_REUSE):
+            alpha = tf.get_variable(name='alpha', shape=(channel_num,), trainable=True)
+            beta = tf.get_variable(name='beta', shape=(channel_num,), trainable=True)
+            output = alpha * tensor + beta
+
+    @classmethod
     def leaky_relu(cls, tensor, name='leaky_relu'):
         return tf.nn.leaky_relu(tensor, cls.SLOPE_LRU, name=name)
 
@@ -62,11 +69,11 @@ class NetworkOps(object):
         )
 
     @classmethod
-    def max_pool(cls, tensor, name='max_pool'):
+    def max_pool(cls, tensor, pool=2, stride=2, name='max_pool'):
         return tf.layers.max_pooling2d(
             inputs=tensor,
-            pool_size=(2, 2),
-            strides=(2, 2),
+            pool_size=(pool, pool),
+            strides=(stride, stride),
             padding='same',
             data_format='channels_first',
             name=name
@@ -178,3 +185,80 @@ class NetworkOps(object):
             if not disable_dropout:
                 tensor = cls.dropout(tensor=tensor, rate=droprate, trainable=trainable)
             return tensor
+
+    @classmethod
+    def resnet_block_first(cls, in_tensor, layer_name, out_chan, stride=1, trainable=True):
+        in_chan = in_tensor.get_shape().as_list()[1]
+        with tf.variable_scope(layer_name):
+            # Shortcut connection
+            if in_chan == out_chan:
+                if stride == 1:
+                    shortcut = tf.identity(in_tensor)
+                else:
+                    shortcut = cls.max_pool(tensor=in_tensor, pool=stride, stride=stride)
+            else:
+                shortcut = cls.conv(in_tensor, kernel_size=1, out_chan=out_chan, stride=stride, name='conv2d', trainable=trainable)
+                shortcut = cls.batch_normalization(tensor=shortcut, name='batch_norm', trainable=trainable)
+            # Residual
+            tensor = cls.conv(in_tensor, kernel_size=3, out_chan=out_chan, stride=2, name='conv2d_1', trainable=trainable)
+            tensor = cls.batch_normalization(tensor=tensor, name='batch_norm_1')
+            tensor = cls.leaky_relu(tensor=tensor, name='leaky_relu_1')
+            tensor = cls.conv(tensor=tensor, kernel_size=3, out_chan=out_chan, stride=1, name='conv2d_2', trainable=trainable)
+            tensor = cls.batch_normalization(tensor=tensor, name='batch_norm_2')
+            # Merge
+            tensor = tf.add(tensor, shortcut)
+            # tensor = cls.leaky_relu(tensor=tensor, name='leaky_relu_2')  # http://torch.ch/blog/2016/02/04/resnets.html
+        return tensor
+
+    @classmethod
+    def resnet_block(cls, in_tensor, layer_name, out_chan, trainable=True):
+        in_chan = in_tensor.get_shape().as_list()[1]
+        with tf.variable_scope(layer_name):
+            # Shortcut connection
+            shortcut = in_tensor
+            # Residual
+            tensor = cls.conv(in_tensor, kernel_size=3, out_chan=out_chan, stride=1, name='conv2d_1', trainable=trainable)
+            tensor = cls.batch_normalization(tensor=tensor, name='batch_norm_1')
+            tensor = cls.leaky_relu(tensor=tensor, name='leaky_relu_1')
+            tensor = cls.conv(tensor=tensor, kernel_size=3, out_chan=out_chan, stride=1, name='conv2d_2', trainable=trainable)
+            tensor = cls.batch_normalization(tensor=tensor, name='batch_norm_2')
+            # Merge
+            tensor = tf.add(tensor, shortcut)
+            # tensor = cls.leaky_relu(tensor=tensor, name='leaky_relu_2')  # http://torch.ch/blog/2016/02/04/resnets.html
+        return tensor
+
+
+class ImageOps(object):
+    @classmethod
+    def make_gaussian(cls, size, sigma=3, centre=None, normalized=False):
+        """ Make a square gaussian kernel.
+        size is the length of a side of the square
+        fwhm is full-width-half-maximum, which
+        can be thought of as an effective radius.
+        """
+        x = np.arange(0, size, 1, float)
+        y = x[:, np.newaxis]
+        # sigma = tf.mult(fwhm, tf.reciprocal(tf.sqrt(tf.mul(8, tf.log(2))))) # fwhm * 1/(sqrt(8*ln(2))) = sigma
+        if normalized:
+            norm_factor = 1 / 2*math.pi * sigma
+        else:
+            norm_factor = 1
+        if centre is None:
+            x0 = y0 = size // 2
+        else:
+            x0 = centre[0]
+            y0 = centre[1]
+        return norm_factor * tf.exp(-((x - x0) ** 2 + (y - y0) ** 2) / (2.0 * sigma ** 2))
+
+    @classmethod
+    def get_single_heatmap(cls, hand_joints, heatmap_size, gaussian_variance, scale_factor, normalized=False):
+        gt_heatmap_np = []
+        # invert_heatmap_np = tf.ones(shape=(heatmap_size, heatmap_size))  # See comment below
+        for j in range(hand_joints.shape[0]):
+            cur_joint_heatmap = cls.make_gaussian(heatmap_size,
+                                                  gaussian_variance,
+                                                  centre=(hand_joints[j] // scale_factor),
+                                                  normalized=normalized)
+            gt_heatmap_np.append(cur_joint_heatmap)
+            # invert_heatmap_np -= cur_joint_heatmap  # Maybe we should include that but I don't see why; maybe background?
+        return gt_heatmap_np, 0

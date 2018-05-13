@@ -41,7 +41,7 @@ if __name__ == '__main__':
             learning_schedule=[
                 {
                     'loss_terms_to_optimize': {
-                        'kp_2D_mse': ['keypoints', 'upscale_pred', 'point_pred'],
+                        'kp_2D_mse': ['keypoints', 'loss_calculation', 'upscale_pred', 'point_pred'],
                     },
                     'metrics': ['kp_2D_mse'],
                     'learning_rate': 1e-5,
