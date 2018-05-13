@@ -11,11 +11,12 @@ class NetworkOps(object):
     SEED = 42
 
     @classmethod
-    def scale_layer(cls, tensor, chan_num):
+    def scale_layer(cls, tensor):
         with tf.variable_scope("scale", reuse=tf.AUTO_REUSE):
+            channel_num = tensor.shape[1]
             alpha = tf.get_variable(name='alpha', shape=(channel_num,), trainable=True)
             beta = tf.get_variable(name='beta', shape=(channel_num,), trainable=True)
-            output = alpha * tensor + beta
+            return alpha * tensor + beta
 
     @classmethod
     def leaky_relu(cls, tensor, name='leaky_relu'):
@@ -84,7 +85,7 @@ class NetworkOps(object):
         return tf.layers.batch_normalization(
             inputs=tensor,
             axis=cls.CHANNEL_AXIS,
-            momentum=0.99,
+            momentum=0.95,
             epsilon=0.001,
             center=True,
             scale=True,
@@ -165,17 +166,25 @@ class NetworkOps(object):
             )
 
     @classmethod
-    def conv_relu(cls, in_tensor, layer_name, kernel_size, out_chan, maxpool=False, stride=1, trainable=True):
+    def conv_relu(cls, in_tensor, layer_name, kernel_size, out_chan, stride=1, maxpool=False, enable_scale=False, disable_dropout=True, trainable=True):
         with tf.variable_scope(layer_name):
             tensor = cls.conv(tensor=in_tensor, kernel_size=kernel_size, out_chan=out_chan, stride=stride, name='conv2d', trainable=trainable)
             if maxpool:
                 # maxpool(relu(input)) == relu(maxpool(input)); this ordering is a tiny opt which is not general https://github.com/tensorflow/tensorflow/issues/3180#issuecomment-288389772
                 tensor = cls.max_pool(tensor=tensor)
-                tensor = cls.leaky_relu(tensor=tensor)
-            else:
+                # if enable_scale:
+                #     tensor = cls.scale_layer(tensor=tensor)
                 tensor = cls.leaky_relu(tensor=tensor)
                 tensor = cls.batch_normalization(tensor, trainable=trainable)  # https://github.com/ducha-aiki/caffenet-benchmark/blob/master/batchnorm.md
-                tensor = cls.dropout(tensor=tensor, trainable=trainable)
+                if not disable_dropout:
+                    tensor = cls.dropout(tensor=tensor, trainable=trainable)
+            else:
+                # if enable_scale:
+                #     tensor = cls.scale_layer(tensor=tensor)
+                tensor = cls.leaky_relu(tensor=tensor)
+                tensor = cls.batch_normalization(tensor, trainable=trainable)  # https://github.com/ducha-aiki/caffenet-benchmark/blob/master/batchnorm.md
+                if not disable_dropout:
+                    tensor = cls.dropout(tensor=tensor, trainable=trainable)
             return tensor
 
     @classmethod

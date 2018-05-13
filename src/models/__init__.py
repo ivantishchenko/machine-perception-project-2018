@@ -13,4 +13,5 @@
 from .example import ExampleNet
 from .ivan import NewModel
 from .mickey import Glover
-__all__ = ('ExampleNet', 'NewModel', 'Glover')
+from .trivialnet import TrivialNet
+__all__ = ('ExampleNet', 'NewModel', 'Glover', 'TrivialNet')
