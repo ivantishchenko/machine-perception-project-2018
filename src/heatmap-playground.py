@@ -81,9 +81,9 @@ with tf.Session() as session:
     u_lm = tf.losses.mean_squared_error(gt_keypoints, heatmap_keypoints)
     u_lmp = tf.losses.mean_pairwise_squared_error(gt_keypoints, heatmap_keypoints)
 
-    n_l = tf.reduce_mean(tf.squared_difference(gt_keypoints, heatmap_keypoints))
-    n_lm = tf.losses.mean_squared_error(gt_keypoints, heatmap_keypoints)
-    n_lmp = tf.losses.mean_pairwise_squared_error(gt_keypoints, heatmap_keypoints)
+    n_l = tf.reduce_mean(tf.squared_difference(gt_keypoints_norm, normalized_heatmap))
+    n_lm = tf.losses.mean_squared_error(gt_keypoints_norm, normalized_heatmap)
+    n_lmp = tf.losses.mean_pairwise_squared_error(gt_keypoints_norm, normalized_heatmap)
 
     numerical = tf.reduce_mean(tf.squared_difference(tensor, gt))
 
@@ -126,7 +126,7 @@ with tf.Session() as session:
                             dtype=tf.float32, back_prop=False)
 
     session.run(model)
-    [u_p_np, n_p_np, u_gt_np, n_gt_np] = session.run([heatmap_keypoints, normalized_heatmap, gt_keypoints_norm, gt_keypoints_norm])
+    [u_p_np, n_p_np, u_gt_np, n_gt_np] = session.run([heatmap_keypoints, normalized_heatmap, gt_keypoints, gt_keypoints_norm])
     [u_l_np, u_lm_np, u_lmp_np, n_l_np, n_lm_np, n_lmp_np] = session.run([u_l, u_lm, u_lmp, n_l, n_lm, n_lmp])
     pred_np = session.run(pred_upscale)
     numerical_np = session.run(numerical)
@@ -178,7 +178,7 @@ print("{} {}".format(scale_loss, scale_loss / pred_np.shape[1]))
 #
 #     plt.show()
 
-# Print kernel-sized images and diffs and such
+# # Print kernel-sized images and diffs and such
 # for i in range(pred_np.shape[1]):
 #     fig = plt.figure()
 #
@@ -214,7 +214,7 @@ print("{} {}".format(scale_loss, scale_loss / pred_np.shape[1]))
 #     mse = np.sum(np.square(np.subtract(n_gt_np[0][i], u_p_np[0][i]))).mean()
 #     a.set_title('diff_nu = {}'.format(mse))
 #     a = fig.add_subplot(4,3,9)
-#     plt.imshow(u_gt_np[0][i])
+#     plt.imshow(n_gt_np[0][i])
 #     a.set_title('n_gt')
 #
 #     a = fig.add_subplot(4,3,10)
