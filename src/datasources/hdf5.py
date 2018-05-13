@@ -22,6 +22,7 @@ class HDF5Source(BaseDataSource):
                  keys_to_use: List[str],
                  hdf_path: str,
                  testing=False,
+                 validation=False,
                  **kwargs):
         """Create queues and threads to read and preprocess data from specified keys."""
         hdf5 = h5py.File(hdf_path, 'r')
@@ -34,6 +35,7 @@ class HDF5Source(BaseDataSource):
         # Internal logic, prevent's thread creation which sends data to GPU
         # Also, if set to true, will not cut the hand as per given keypoints
         self.testing = testing
+        self.validation = validation
 
         # Random state for data augmentation
         # TODO: Interesting to maybe adjust for our project
@@ -111,7 +113,7 @@ class HDF5Source(BaseDataSource):
     def preprocess_entry(self, entry):
         """Resize image and normalize intensities."""
         res_size = (128, 128)
-        img = entry['img'].transpose(1,2,0)
+        img = entry['img'].transpose(1, 2, 0)
         img = img / 255.0
 
         if not self.testing:

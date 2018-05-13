@@ -34,7 +34,6 @@ def view_submission(dataset, submission, normalized = True):
                plt.plot([kpx[0], kpx[i * 4]], [kpy[0], kpy[i * 4]], color=colours[0])
                plt.plot(kpx[i * 4 - 3:(i + 1) * 4 - 3], kpy[i * 4 - 3:(i + 1) * 4 - 3], marker='o', color=colours[i])
             plt.show()
-            input("Press Enter to continue...")
 
 
 g = h5py.File('testing.h5', 'r')

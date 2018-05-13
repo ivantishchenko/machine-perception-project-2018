@@ -203,9 +203,14 @@ class BaseModel(object):
         if num_steps is None:
             num_entries = np.min([s.num_entries for s in list(self._train_data.values())])
             num_steps = int(num_epochs * num_entries / self._batch_size)
+        logger.info('Training for %d steps' % num_steps)
         self.initialize_if_not(training=True)
 
         initial_step = self.checkpoint.load_all()
+        if initial_step >= num_steps:
+            # Let's return immediately, we will not even try another iteration to keep the checkpoints clean
+            return
+
         current_step = initial_step
         for current_step in range(initial_step, num_steps):
             fetches = {}
@@ -232,10 +237,10 @@ class BaseModel(object):
             self.time.end('train_iteration')
 
             # Print progress
-            to_print = '%07d> ' % current_step
+            to_print = '%07d/%07d> ' % (current_step, num_steps)
             to_print += ', '.join(['%s = %f' % (k, v)
                                    for k, v in zip(loss_term_keys, outcome['loss_terms'])])
-            self.time.log_every('train_iteration', to_print, seconds=2)
+            self.time.log_every('train_iteration', to_print, seconds=5)
 
             # Trigger copy weights & concurrent testing (if not already running)
             if self._enable_live_testing:

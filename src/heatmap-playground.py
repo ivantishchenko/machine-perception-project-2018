@@ -7,107 +7,130 @@
 #     sys.path.insert(0, src_dir)
 # del src_dir
 
+import h5py
+import os
+import sys
+os.environ["CUDA_VISIBLE_DEVICES"]="-1"
 import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
 from util.common_ops import ImageOps as iop
 
-CROPSIZE = 128
+SEED = 42
+CROPSIZE = 320
 HEATMAPSIZE = 16
+BATCHSIZE = 32
 
-tensor_np = np.array([[
-                        [1, 5], [19, 32.], [104, 44], [90, 11], [55, 22],
-                        [88, 128], [32, 65], [91, 38], [73, 40], [99, 10], [21, 1], [5, 19],
-                        [32, 104], [44, 90], [11, 55], [22, 88], [128, 32], [65, 91], [38, 73], [40, 99], [10, 21]
-                    ]])
-tensor = tf.convert_to_tensor(tensor_np, dtype=tf.float32)
-gt_np = 128 * np.random.random_sample(size=(1, 21, 2))
+# Read in here some random images and corresponding ground truth values
+project_root = os.path.dirname(os.path.abspath(os.path.dirname(sys.argv[0])))
+train_file = os.path.join(project_root, 'datasets', 'training.h5')
+f = h5py.File(train_file, 'r')
+n_samples = len(f['train']['img'])
+index_array = list(range(n_samples))
+# np.random.seed(SEED)
+permuted_indexes = np.random.permutation(index_array)
+gt_np = np.empty([BATCHSIZE, 21, 2])
+
+for i, idx in enumerate(permuted_indexes[:BATCHSIZE], 0):
+    gt_np[i] = f['train']['kp_2D'][idx]
 gt = tf.convert_to_tensor(gt_np, dtype=tf.float32)
+
+rand_guesses_np = CROPSIZE * np.random.random_sample(size=(BATCHSIZE, 21, 2))
+rand_guesses = tf.convert_to_tensor(rand_guesses_np, dtype=tf.float32)
+
 model = tf.global_variables_initializer()
 
 with tf.Session() as session:
-    heatmap_keypoints, _ = tf.map_fn(lambda i: iop.get_single_heatmap(i, HEATMAPSIZE, 1.0, CROPSIZE // HEATMAPSIZE),
-                                     tf.nn.embedding_lookup(tensor, np.array(range(tensor.shape[0]))),
-                                     dtype=([tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
+    u_hm_pred, _ = tf.map_fn(lambda i: iop.get_single_heatmap(i, HEATMAPSIZE, 1.0, CROPSIZE // HEATMAPSIZE),
+                             tf.nn.embedding_lookup(rand_guesses, np.array(range(rand_guesses.shape[0]))),
+                             dtype=([tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
                                              tf.float32,
                                              tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
                                              tf.float32,
                                              tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
                                              tf.float32,
                                              ], tf.float32),
-                                     back_prop=False)
-    heatmap_keypoints = tf.stack(heatmap_keypoints)
-    heatmap_keypoints = tf.transpose(heatmap_keypoints, perm=[1, 0, 2, 3])
+                             back_prop=False)
+    u_hm_pred = tf.stack(u_hm_pred)
+    u_hm_pred = tf.transpose(u_hm_pred, perm=[1, 0, 2, 3])
 
-    normalized_heatmap, _ = tf.map_fn(lambda i: iop.get_single_heatmap(i, HEATMAPSIZE, 1.0, CROPSIZE // HEATMAPSIZE, True),
-                                     tf.nn.embedding_lookup(tensor, np.array(range(tensor.shape[0]))),
-                                     dtype=([tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
+    n_hm_pred, _ = tf.map_fn(lambda i: iop.get_single_heatmap(i, HEATMAPSIZE, 1.0, CROPSIZE // HEATMAPSIZE, True),
+                             tf.nn.embedding_lookup(rand_guesses, np.array(range(rand_guesses.shape[0]))),
+                             dtype=([tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
                                              tf.float32,
                                              tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
                                              tf.float32,
                                              tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
                                              tf.float32,
                                              ], tf.float32),
-                                     back_prop=False)
-    normalized_heatmap = tf.stack(normalized_heatmap)
-    normalized_heatmap = tf.transpose(normalized_heatmap, perm=[1, 0, 2, 3])
+                             back_prop=False)
+    n_hm_pred = tf.stack(n_hm_pred)
+    n_hm_pred = tf.transpose(n_hm_pred, perm=[1, 0, 2, 3])
 
-    gt_keypoints, _ = tf.map_fn(lambda i: iop.get_single_heatmap(i, HEATMAPSIZE, 1.0, CROPSIZE // HEATMAPSIZE),
-                                     tf.nn.embedding_lookup(gt, np.array(range(gt.shape[0]))),
-                                     dtype=([tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
+    u_hm_gt, _ = tf.map_fn(lambda i: iop.get_single_heatmap(i, HEATMAPSIZE, 1.0, CROPSIZE // HEATMAPSIZE),
+                           tf.nn.embedding_lookup(gt, np.array(range(gt.shape[0]))),
+                           dtype=([tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
                                              tf.float32,
                                              tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
                                              tf.float32,
                                              tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
                                              tf.float32,
                                              ], tf.float32),
-                                     back_prop=False)
-    gt_keypoints = tf.stack(gt_keypoints)
-    gt_keypoints = tf.transpose(gt_keypoints, perm=[1, 0, 2, 3])
+                           back_prop=False)
+    u_hm_gt = tf.stack(u_hm_gt)
+    u_hm_gt = tf.transpose(u_hm_gt, perm=[1, 0, 2, 3])
 
-    gt_keypoints_norm, _ = tf.map_fn(lambda i: iop.get_single_heatmap(i, HEATMAPSIZE, 1.0, CROPSIZE // HEATMAPSIZE, True),
-                                     tf.nn.embedding_lookup(gt, np.array(range(gt.shape[0]))),
-                                     dtype=([tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
+    n_hm_gt, _ = tf.map_fn(lambda i: iop.get_single_heatmap(i, HEATMAPSIZE, 1.0, CROPSIZE // HEATMAPSIZE, True),
+                           tf.nn.embedding_lookup(gt, np.array(range(gt.shape[0]))),
+                           dtype=([tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
                                              tf.float32,
                                              tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
                                              tf.float32,
                                              tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
                                              tf.float32,
                                              ], tf.float32),
-                                     back_prop=False)
-    gt_keypoints_norm = tf.stack(gt_keypoints_norm)
-    gt_keypoints_norm = tf.transpose(gt_keypoints_norm, perm=[1, 0, 2, 3])
+                           back_prop=False)
+    n_hm_gt = tf.stack(n_hm_gt)
+    n_hm_gt = tf.transpose(n_hm_gt, perm=[1, 0, 2, 3])
 
-    u_l = (HEATMAPSIZE ** 2) * tf.reduce_mean(tf.squared_difference(gt_keypoints, heatmap_keypoints))
-    u_lm = (HEATMAPSIZE ** 2) * tf.losses.mean_squared_error(gt_keypoints, heatmap_keypoints)
-    u_lmp = (HEATMAPSIZE ** 2) * tf.losses.mean_pairwise_squared_error(gt_keypoints, heatmap_keypoints)
+    u_l = (HEATMAPSIZE ** 2) * tf.reduce_mean(tf.squared_difference(u_hm_gt, u_hm_pred))
+    u_lm = (HEATMAPSIZE ** 2) * tf.losses.mean_squared_error(u_hm_gt, u_hm_pred)
 
-    n_l = (HEATMAPSIZE ** 2) * tf.reduce_mean(tf.squared_difference(gt_keypoints_norm, normalized_heatmap))
-    n_lm = (HEATMAPSIZE ** 2) * tf.losses.mean_squared_error(gt_keypoints_norm, normalized_heatmap)
-    n_lmp = (HEATMAPSIZE ** 2) * tf.losses.mean_pairwise_squared_error(gt_keypoints_norm, normalized_heatmap)
+    n_l = (HEATMAPSIZE ** 2) * tf.reduce_mean(tf.squared_difference(n_hm_gt, n_hm_pred))
+    n_lm = (HEATMAPSIZE ** 2) * tf.losses.mean_squared_error(n_hm_gt, n_hm_pred)
 
-    numerical = tf.reduce_mean(tf.squared_difference(tensor, gt))
+    numerical = tf.reduce_mean(tf.squared_difference(rand_guesses, gt))
 
-    heatmap_large, _ = tf.map_fn(lambda i: iop.get_single_heatmap(i, CROPSIZE, 1.0, CROPSIZE // CROPSIZE),
-                                     tf.nn.embedding_lookup(tensor, np.array(range(tensor.shape[0]))),
-                                     dtype=([tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
+    u_hm_pred_fs, _ = tf.map_fn(lambda i: iop.get_single_heatmap(i, CROPSIZE, 1.0, CROPSIZE // CROPSIZE),
+                                tf.nn.embedding_lookup(rand_guesses, np.array(range(rand_guesses.shape[0]))),
+                                dtype=([tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
                                              tf.float32,
                                              tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
                                              tf.float32,
                                              tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
                                              tf.float32,
                                              ], tf.float32),
-                                     back_prop=False)
-    heatmap_large = tf.stack(heatmap_large)
-    heatmap_large = tf.transpose(heatmap_large, perm=[1, 0, 2, 3])
+                                back_prop=False)
+    u_hm_pred_fs = tf.stack(u_hm_pred_fs)
+    u_hm_pred_fs = tf.transpose(u_hm_pred_fs, perm=[1, 0, 2, 3])
 
+    u_hm_gt_fs, _ = tf.map_fn(lambda i: iop.get_single_heatmap(i, CROPSIZE, 1.0, CROPSIZE // CROPSIZE),
+                                tf.nn.embedding_lookup(gt, np.array(range(gt.shape[0]))),
+                                dtype=([tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
+                                             tf.float32,
+                                             tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
+                                             tf.float32,
+                                             tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
+                                             tf.float32,
+                                             ], tf.float32),
+                                back_prop=False)
+    u_hm_gt_fs = tf.stack(u_hm_gt_fs)
+    u_hm_gt_fs = tf.transpose(u_hm_gt_fs, perm=[1, 0, 2, 3])
 
-    pred_upscale = heatmap_keypoints
+    pred_upscale = u_hm_pred
     pred_upscale = tf.transpose(pred_upscale, [0, 2, 3, 1])
     pred_upscale = tf.image.resize_images(pred_upscale, (CROPSIZE, CROPSIZE), method=tf.image.ResizeMethod.BICUBIC, align_corners=True)
     pred_upscale = tf.transpose(pred_upscale, [0, 3, 1, 2])
-    # pred_upscale = tf.map_fn(lambda i: tf.image.per_image_standardization(i), tf.nn.embedding_lookup(pred_upscale, np.array(range(pred_upscale.shape[0]))),
-    #                          back_prop=False)
 
     input = pred_upscale
 
@@ -127,11 +150,11 @@ with tf.Session() as session:
                             dtype=tf.float32, back_prop=False)
 
     session.run(model)
-    [u_p_np, n_p_np, u_gt_np, n_gt_np] = session.run([heatmap_keypoints, normalized_heatmap, gt_keypoints, gt_keypoints_norm])
-    [u_l_np, u_lm_np, u_lmp_np, n_l_np, n_lm_np, n_lmp_np] = session.run([u_l, u_lm, u_lmp, n_l, n_lm, n_lmp])
-    pred_np = session.run(pred_upscale)
+    [u_p_np, n_p_np, u_gt_np, n_gt_np] = session.run([u_hm_pred, n_hm_pred, u_hm_gt, n_hm_gt])
+    [u_l_np, u_lm_np, n_l_np, n_lm_np] = session.run([u_l, u_lm, n_l, n_lm])
     numerical_np = session.run(numerical)
-    heatmap_large_np = session.run(heatmap_large)
+    [u_hm_pred_fs_np, u_hm_gt_fs_np] = session.run([u_hm_pred_fs, u_hm_gt_fs])
+    pred_np = session.run(pred_upscale)
     points_np = session.run(pred_points)
 
 u_loss_np = 0
@@ -141,19 +164,23 @@ for i in range(pred_np.shape[1]):
     n_image = np.sum(np.square(np.subtract(n_gt_np[0][i], n_p_np[0][i]))).mean()
     u_loss_np += u_image
     n_loss_np += n_image
-print(numerical_np)
-print("{} {} {}".format(u_l_np, u_lm_np, u_lmp_np))
-print("{} {}".format(u_loss_np, u_loss_np / pred_np.shape[1]))
-print("{} {}".format((u_loss_np / pred_np.shape[1]) / u_l_np, (u_loss_np / pred_np.shape[1]) / u_lmp_np))
-print("{} {} {}".format(n_l_np, n_lm_np, n_lmp_np))
-print("{} {}".format(n_loss_np, n_loss_np / pred_np.shape[1]))
-print("{} {}".format((n_loss_np / pred_np.shape[1]) / n_l_np, (n_loss_np / pred_np.shape[1]) / n_lmp_np))
+print("Unnormalized losses:")
+print("    Manual = %8.3f    Layer  = %8.3f" % (u_l_np, u_lm_np))
+print("    MSE    = %8.3f    SE     = %8.3f" % (u_loss_np / pred_np.shape[1], u_loss_np))
+print("    Validate:   %3.1f" % ((u_loss_np / pred_np.shape[1]) / u_lm_np))
+print("Normalized losses:")
+print("    Manual = %8.3f    Layer  = %8.3f" % (n_l_np, n_lm_np))
+print("    MSE    = %8.3f    SE     = %8.3f" % (n_loss_np / pred_np.shape[1], n_loss_np))
+print("    Validate:   %3.1f" %((n_loss_np / pred_np.shape[1]) / n_lm_np))
 
 scale_loss = 0
 for i in range(pred_np.shape[1]):
-    s_image = np.sum(np.square(np.subtract(points_np[0][i], tensor_np[0][i]))).mean()
+    s_image = np.sum(np.square(np.subtract(points_np[0][i], rand_guesses_np[0][i]))).mean()
     scale_loss += s_image
-print("{} {}".format(scale_loss, scale_loss / pred_np.shape[1]))
+print("Coordinate loss:")
+print("    %8.3f" % numerical_np)
+print("Upscaling loss:")
+print("    MSE    = %8.3f    SE     = %8.3f" % (scale_loss / pred_np.shape[1], scale_loss))
 
 # # Print scaled images with verifier
 # np_preds = []
@@ -181,54 +208,54 @@ print("{} {}".format(scale_loss, scale_loss / pred_np.shape[1]))
 #
 #     plt.show()
 
-# # Print kernel-sized images and diffs and such
+# Print kernel-sized images and diffs and such
 # for i in range(pred_np.shape[1]):
 #     fig = plt.figure()
 #
-#     a = fig.add_subplot(4,3,1)
+#     a = fig.add_subplot(3,5,1)
+#     plt.imshow(u_hm_gt_fs_np[0][i])
+#     a.set_title('gt_orig {}'.format(gt_np[0][i]))
+#     a = fig.add_subplot(3,5,2)
 #     plt.imshow(n_p_np[0][i])
 #     a.set_title('n_hm')
-#     a = fig.add_subplot(4,3,2)
+#     a = fig.add_subplot(3,5,3)
 #     plt.imshow(u_p_np[0][i])
 #     a.set_title('u_hm')
-#     a = fig.add_subplot(4,3,3)
-#     plt.imshow(np.square(np.subtract(n_p_np[0][i], u_p_np[0][i])))
-#     mse = np.square(np.subtract(n_p_np[0][i], u_p_np[0][i])).mean()
-#     a.set_title('Diff = {}'.format(mse))
+#     a = fig.add_subplot(3,5,4)
+#     plt.imshow(pred_np[0][i])
+#     a.set_title('upscale {}'.format(points_np[0][i]))
+#     a = fig.add_subplot(3,5,5)
+#     plt.imshow(u_hm_pred_fs_np[0][i])
+#     a.set_title('guess_orig {}'.format(rand_guesses_np[0][i]))
+#     # plt.imshow(np.square(np.subtract(n_p_np[0][i], u_p_np[0][i])))
+#     # mse = np.square(np.subtract(n_p_np[0][i], u_p_np[0][i])).mean()
+#     # a.set_title('Diff = %.3f' % mse)
 #
-#     a = fig.add_subplot(4,3,4)
-#     plt.imshow(np.square(np.subtract(u_gt_np[0][i], n_p_np[0][i])))
-#     mse = np.sum(np.square(np.subtract(u_gt_np[0][i], n_p_np[0][i]))).mean()
-#     a.set_title('diff_un = {}'.format(mse))
-#     a = fig.add_subplot(4,3,5)
-#     plt.imshow(np.square(np.subtract(u_gt_np[0][i], u_p_np[0][i])))
-#     mse = np.sum(np.square(np.subtract(u_gt_np[0][i], u_p_np[0][i]))).mean()
-#     a.set_title('diff_uu = {}'.format(mse))
-#     a = fig.add_subplot(4,3,6)
+#     a = fig.add_subplot(3,5,6)
 #     plt.imshow(u_gt_np[0][i])
 #     a.set_title('u_gt')
+#     a = fig.add_subplot(3,5,7)
+#     plt.imshow(np.square(np.subtract(u_gt_np[0][i], n_p_np[0][i])))
+#     mse = np.sum(np.square(np.subtract(u_gt_np[0][i], n_p_np[0][i]))).mean()
+#     a.set_title('diff_un = %.3f' % mse)
+#     a = fig.add_subplot(3,5,8)
+#     plt.imshow(np.square(np.subtract(u_gt_np[0][i], u_p_np[0][i])))
+#     mse = np.sum(np.square(np.subtract(u_gt_np[0][i], u_p_np[0][i]))).mean()
+#     a.set_title('diff_uu = %.3f' % mse)
 #
-#     a = fig.add_subplot(4,3,7)
-#     plt.imshow(np.square(np.subtract(n_gt_np[0][i], n_p_np[0][i])))
-#     mse = np.sum(np.square(np.subtract(n_gt_np[0][i], n_p_np[0][i]))).mean()
-#     a.set_title('diff_nn = {}'.format(mse))
-#     a = fig.add_subplot(4,3,8)
-#     plt.imshow(np.square(np.subtract(n_gt_np[0][i], u_p_np[0][i])))
-#     mse = np.sum(np.square(np.subtract(n_gt_np[0][i], u_p_np[0][i]))).mean()
-#     a.set_title('diff_nu = {}'.format(mse))
-#     a = fig.add_subplot(4,3,9)
+#     a = fig.add_subplot(3,5,11)
 #     plt.imshow(n_gt_np[0][i])
 #     a.set_title('n_gt')
+#     a = fig.add_subplot(3,5,12)
+#     plt.imshow(np.square(np.subtract(n_gt_np[0][i], n_p_np[0][i])))
+#     mse = np.sum(np.square(np.subtract(n_gt_np[0][i], n_p_np[0][i]))).mean()
+#     a.set_title('diff_nn = %.3f' % mse)
+#     a = fig.add_subplot(3,5,13)
+#     plt.imshow(np.square(np.subtract(n_gt_np[0][i], u_p_np[0][i])))
+#     mse = np.sum(np.square(np.subtract(n_gt_np[0][i], u_p_np[0][i]))).mean()
+#     a.set_title('diff_nu = %.3f' % mse)
 #
-#     a = fig.add_subplot(4,3,10)
-#     plt.imshow(pred_np[0][i])
-#     a.set_title('upscale')
-#     a = fig.add_subplot(4,3,11)
-#     plt.imshow(heatmap_large_np[0][i])
-#     a.set_title('orig')
-#     a = fig.add_subplot(4,3,12)
-#     plt.imshow(np.square(np.subtract(pred_np[0][i], heatmap_large_np[0][i])))
-#     mse = np.sum(np.square(np.subtract(pred_np[0][i], heatmap_large_np[0][i]))).mean()
-#     a.set_title('diff = {}'.format(mse))
+#     # plt.imshow(np.square(np.subtract(pred_np[0][i], u_hm_pred_fs_np[0][i])))
+#     # mse = np.sum(np.square(np.subtract(pred_np[0][i], u_hm_pred_fs_np[0][i]))).mean()
 #
 #     plt.show()
