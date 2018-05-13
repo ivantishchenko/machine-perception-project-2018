@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 from util.common_ops import ImageOps as iop
 
 CROPSIZE = 128
+HEATMAPSIZE = 16
 
 tensor_np = np.array([[
                         [1, 5], [19, 32.], [104, 44], [90, 11], [55, 22],
@@ -25,7 +26,7 @@ gt = tf.convert_to_tensor(gt_np, dtype=tf.float32)
 model = tf.global_variables_initializer()
 
 with tf.Session() as session:
-    heatmap_keypoints, _ = tf.map_fn(lambda i: iop.get_single_heatmap(i, 16, 1.0, CROPSIZE // 16),
+    heatmap_keypoints, _ = tf.map_fn(lambda i: iop.get_single_heatmap(i, HEATMAPSIZE, 1.0, CROPSIZE // HEATMAPSIZE),
                                      tf.nn.embedding_lookup(tensor, np.array(range(tensor.shape[0]))),
                                      dtype=([tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
                                              tf.float32,
@@ -38,7 +39,7 @@ with tf.Session() as session:
     heatmap_keypoints = tf.stack(heatmap_keypoints)
     heatmap_keypoints = tf.transpose(heatmap_keypoints, perm=[1, 0, 2, 3])
 
-    normalized_heatmap, _ = tf.map_fn(lambda i: iop.get_single_heatmap(i, 16, 1.0, CROPSIZE // 16, True),
+    normalized_heatmap, _ = tf.map_fn(lambda i: iop.get_single_heatmap(i, HEATMAPSIZE, 1.0, CROPSIZE // HEATMAPSIZE, True),
                                      tf.nn.embedding_lookup(tensor, np.array(range(tensor.shape[0]))),
                                      dtype=([tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
                                              tf.float32,
@@ -51,7 +52,7 @@ with tf.Session() as session:
     normalized_heatmap = tf.stack(normalized_heatmap)
     normalized_heatmap = tf.transpose(normalized_heatmap, perm=[1, 0, 2, 3])
 
-    gt_keypoints, _ = tf.map_fn(lambda i: iop.get_single_heatmap(i, 16, 1.0, CROPSIZE // 16),
+    gt_keypoints, _ = tf.map_fn(lambda i: iop.get_single_heatmap(i, HEATMAPSIZE, 1.0, CROPSIZE // HEATMAPSIZE),
                                      tf.nn.embedding_lookup(gt, np.array(range(gt.shape[0]))),
                                      dtype=([tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
                                              tf.float32,
@@ -64,7 +65,7 @@ with tf.Session() as session:
     gt_keypoints = tf.stack(gt_keypoints)
     gt_keypoints = tf.transpose(gt_keypoints, perm=[1, 0, 2, 3])
 
-    gt_keypoints_norm, _ = tf.map_fn(lambda i: iop.get_single_heatmap(i, 16, 1.0, CROPSIZE // 16, True),
+    gt_keypoints_norm, _ = tf.map_fn(lambda i: iop.get_single_heatmap(i, HEATMAPSIZE, 1.0, CROPSIZE // HEATMAPSIZE, True),
                                      tf.nn.embedding_lookup(gt, np.array(range(gt.shape[0]))),
                                      dtype=([tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
                                              tf.float32,
@@ -77,13 +78,13 @@ with tf.Session() as session:
     gt_keypoints_norm = tf.stack(gt_keypoints_norm)
     gt_keypoints_norm = tf.transpose(gt_keypoints_norm, perm=[1, 0, 2, 3])
 
-    u_l = tf.reduce_mean(tf.squared_difference(gt_keypoints, heatmap_keypoints))
-    u_lm = tf.losses.mean_squared_error(gt_keypoints, heatmap_keypoints)
-    u_lmp = tf.losses.mean_pairwise_squared_error(gt_keypoints, heatmap_keypoints)
+    u_l = (HEATMAPSIZE ** 2) * tf.reduce_mean(tf.squared_difference(gt_keypoints, heatmap_keypoints))
+    u_lm = (HEATMAPSIZE ** 2) * tf.losses.mean_squared_error(gt_keypoints, heatmap_keypoints)
+    u_lmp = (HEATMAPSIZE ** 2) * tf.losses.mean_pairwise_squared_error(gt_keypoints, heatmap_keypoints)
 
-    n_l = tf.reduce_mean(tf.squared_difference(gt_keypoints_norm, normalized_heatmap))
-    n_lm = tf.losses.mean_squared_error(gt_keypoints_norm, normalized_heatmap)
-    n_lmp = tf.losses.mean_pairwise_squared_error(gt_keypoints_norm, normalized_heatmap)
+    n_l = (HEATMAPSIZE ** 2) * tf.reduce_mean(tf.squared_difference(gt_keypoints_norm, normalized_heatmap))
+    n_lm = (HEATMAPSIZE ** 2) * tf.losses.mean_squared_error(gt_keypoints_norm, normalized_heatmap)
+    n_lmp = (HEATMAPSIZE ** 2) * tf.losses.mean_pairwise_squared_error(gt_keypoints_norm, normalized_heatmap)
 
     numerical = tf.reduce_mean(tf.squared_difference(tensor, gt))
 
@@ -143,8 +144,10 @@ for i in range(pred_np.shape[1]):
 print(numerical_np)
 print("{} {} {}".format(u_l_np, u_lm_np, u_lmp_np))
 print("{} {}".format(u_loss_np, u_loss_np / pred_np.shape[1]))
+print("{} {}".format((u_loss_np / pred_np.shape[1]) / u_l_np, (u_loss_np / pred_np.shape[1]) / u_lmp_np))
 print("{} {} {}".format(n_l_np, n_lm_np, n_lmp_np))
 print("{} {}".format(n_loss_np, n_loss_np / pred_np.shape[1]))
+print("{} {}".format((n_loss_np / pred_np.shape[1]) / n_l_np, (n_loss_np / pred_np.shape[1]) / n_lmp_np))
 
 scale_loss = 0
 for i in range(pred_np.shape[1]):
