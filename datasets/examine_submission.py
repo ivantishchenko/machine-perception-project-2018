@@ -8,7 +8,7 @@ import csv
 colours = {0: 'black', 1: 'blue', 2: 'orange', 3: 'green', 4: 'red', 5: 'yellow'}
 
 project_root = os.path.dirname(os.path.abspath(os.path.dirname(sys.argv[0])))
-submission_path = os.path.join(project_root, 'outputs/Glover/to_submit_to_kaggle.csv')
+submission_path = os.path.join(project_root, 'datasets/submission.csv')
 
 
 def view_submission(dataset, submission, normalized = True):

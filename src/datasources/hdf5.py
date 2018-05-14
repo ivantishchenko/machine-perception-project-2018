@@ -120,9 +120,26 @@ class HDF5Source(BaseDataSource):
             kp_2D = entry['kp_2D']
             img, kp_2D = crop_hand(img, kp_2D)
             img, kp_2D = resize(img, kp_2D, res_size)
+            # op_array = np.random.randint(2, size=8)
+            # if op_array[0] == 1:
+            #     # Modify brightness
+            # if op_array[1] == 1:
+            #     # Modify contrast
+            # if op_array[2] == 1:
+            #     # Modify hue
+            # if op_array[3] == 1:
+            #     # Drop out pixels at random in image
+            # if op_array[4] == 1:
+            #     # Do image flip
+            # if op_array[5] == 1:
+            #     # Do 90° rotation, will be generalized later to any angle
+            # if op_array[6] == 1:
+            #     # Shift the image
+            # if op_array[7] == 1:
+            #     # Shear the image by some amount
             entry['kp_2D'] = kp_2D
 
-        entry['img'] = img.transpose(2,0,1)
+        entry['img'] = img.transpose(2, 0, 1)
 
         # Ensure all values in an entry are 4-byte floating point numbers
         for key, value in entry.items():

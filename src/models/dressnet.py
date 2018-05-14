@@ -3,7 +3,9 @@ from typing import Dict
 import tensorflow as tf
 import numpy as np
 from core import BaseDataSource, BaseModel
-from util.common_ops import NetworkOps as ops
+from util.common_ops import ResNetOps as rop
+from util.common_ops import NetworkOps as nop
+
 
 # HYPER PARAMETERS
 CROPSIZE = 128
@@ -29,24 +31,15 @@ class ResNet(BaseModel):
         keypoints = input_tensors['kp_2D']
 
         with tf.variable_scope('resnet18-vanilla'):
-            image = rgb_image
-            image = ops.resnet_init_block(image, trainable=TRAIN)
+            image = rop.init_block(rgb_image, trainable=TRAIN)
             for i, layers in enumerate(resnet_repetitions_18):
                 for j in range(layers):
-                    if j == 0:
-                        image = ops.resnet_vanilla_first(image, layer_name='conv%d_%d' % (i + 2, j + 1),
-                                                         out_chan=resnet_channels[i], trainable=TRAIN)
-                    else:
-                        image = ops.resnet_vanilla(image, layer_name='conv%d_%d' % (i + 2, j + 1),
-                                                   out_chan=resnet_channels[i], trainable=TRAIN)
-            image = ops.max_pool(image, pool=4, name='max_pool')
-            image = tf.layers.average_pooling2d(image, pool_size=4, strides=1, data_format='channels_first',
-                                                padding='same', name='average_pool')
+                    image = rop.vanilla(image, layer_name='conv%d_%d' % (i + 2, j + 1), first_layer=(j == 0),
+                                        out_chan=resnet_channels[i], trainable=TRAIN)
+            image = rop.last_layer(image)
 
         with tf.variable_scope('flatten'):
-            result = image
-            result = tf.contrib.layers.flatten(result)
-            result = ops.fc_relu(result, 'fc_relu', out_chan=42, disable_dropout=True, trainable=True)
+            result = rop.output_layer(image)
             result = tf.reshape(result, (-1, 21, 2))
 
         with tf.variable_scope('loss_calculation'):

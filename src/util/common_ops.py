@@ -20,7 +20,7 @@ class NetworkOps(object):
             inputs=tensor,
             filters=out_chan,
             kernel_size=kernel_size,
-            strides=(stride, stride),
+            strides=stride,
             padding='same',
             data_format='channels_first',
             dilation_rate=(1, 1),
@@ -44,7 +44,7 @@ class NetworkOps(object):
             inputs=tensor,
             filters=out_chan,
             kernel_size=kernel_size,
-            strides=(stride, stride),
+            strides=stride,
             padding='valid',
             data_format='channels_first',
             activation=None,
@@ -65,8 +65,8 @@ class NetworkOps(object):
     def max_pool(cls, tensor, pool=2, stride=2, name='max_pool'):
         return tf.layers.max_pooling2d(
             inputs=tensor,
-            pool_size=(pool, pool),
-            strides=(stride, stride),
+            pool_size=pool,
+            strides=stride,
             padding='same',
             data_format='channels_first',
             name=name
@@ -183,107 +183,197 @@ class NetworkOps(object):
                 tensor = cls.dropout(tensor=tensor, rate=droprate, trainable=trainable)
             return tensor
 
+
+class ResNetOps(object):
+    MINIMAL_LAYERS = 64
+    KEYPOINTS = 21
+
     @classmethod
-    def resnet_init_block(cls, in_tensor, trainable=True):
-        with tf.variable_scope('resnet_start'):
-            tensor = cls.conv(tensor=in_tensor, kernel_size=7, out_chan=64, stride=2, name='conv2d',
+    def init_block(cls, in_tensor, trainable=True):
+        with tf.variable_scope('resnet_init'):
+            tensor = NetworkOps.conv(tensor=in_tensor, kernel_size=7, out_chan=64, stride=2, name='conv2d',
                               trainable=trainable)
-            tensor = cls.batch_normalization(tensor=tensor, name='batch_norm')
-            tensor = cls.leaky_relu(tensor=tensor, name='leaky_relu')
-            tensor = cls.max_pool(tensor=tensor, pool=3, stride=2)
+            tensor = NetworkOps.batch_normalization(tensor=tensor, name='batch_norm')
+            tensor = NetworkOps.leaky_relu(tensor=tensor, name='leaky_relu')
+            tensor = NetworkOps.max_pool(tensor=tensor, pool=3, stride=2)
             return tensor
 
     @classmethod
-    def resnet_vanilla_first(cls, in_tensor, layer_name, out_chan, trainable=True):
-        if out_chan == 64:
-            strides = 1
+    def last_layer(cls, in_tensor, use_4k=False, trainable=True):
+        with tf.variable_scope('resnet_last'):
+            if use_4k:
+                tensor = NetworkOps.conv(in_tensor, kernel_size=1, out_chan=2048, stride=1, name='conv2d_1',
+                                         trainable=trainable)
+                tensor = NetworkOps.batch_normalization(tensor=tensor, name='batch_norm_1')
+                tensor = NetworkOps.leaky_relu(tensor=tensor, name='leaky_relu_1')
+                tensor = tf.layers.average_pooling2d(tensor, pool_size=4, strides=1, data_format='channels_first',
+                                                     padding='same', name='average_pool')
+                tensor = NetworkOps.conv(tensor, kernel_size=1, out_chan=4096, stride=1, name='conv2d_2',
+                                         trainable=trainable)
+                tensor = NetworkOps.batch_normalization(tensor=tensor, name='batch_norm_2')
+                tensor = NetworkOps.leaky_relu(tensor=tensor, name='leaky_relu_2')
+                return NetworkOps.dropout(tensor=tensor, trainable=trainable, name='batch_norm_2')
+            else:
+                return tf.layers.average_pooling2d(in_tensor, pool_size=4, strides=1, data_format='channels_first',
+                                                   padding='same', name='average_pool')
+
+    @classmethod
+    def output_layer(cls, in_tensor, use_4k=False, trainable=True):
+        with tf.variable_scope('resnet_out'):
+            if use_4k:
+                result = NetworkOps.conv(in_tensor, kernel_size=1, out_chan=cls.KEYPOINTS * 2, stride=1, name='conv2d_1',
+                                         trainable=trainable)
+                result = NetworkOps.batch_normalization(tensor=result, name='batch_norm_1')
+                return NetworkOps.leaky_relu(tensor=result, name='leaky_relu_1')
+            else:
+                result = tf.contrib.layers.flatten(in_tensor)
+                return NetworkOps.fc_relu(result, 'fc_relu', out_chan=cls.KEYPOINTS * 2, disable_dropout=True, trainable=True)
+
+
+    @classmethod
+    def _vanilla_residual(cls, in_tensor, out_chan, strides=1, trainable=True):
+        tensor = NetworkOps.conv(in_tensor, kernel_size=3, out_chan=out_chan, stride=strides, name='conv2d_1',
+                                 trainable=trainable)
+        tensor = NetworkOps.batch_normalization(tensor=tensor, name='batch_norm_1')
+        tensor = NetworkOps.leaky_relu(tensor=tensor, name='leaky_relu_1')
+
+        tensor = NetworkOps.conv(tensor=tensor, kernel_size=3, out_chan=out_chan, stride=1, name='conv2d_2',
+                                 trainable=trainable)
+        return NetworkOps.batch_normalization(tensor=tensor, name='batch_norm_2')
+
+    @classmethod
+    def _bottleneck_residual(cls, in_tensor, out_chan, strides=1, trainable=True):
+        tensor = NetworkOps.conv(in_tensor, kernel_size=1, out_chan=out_chan, stride=strides, name='conv2d_1',
+                                 trainable=trainable)
+        tensor = NetworkOps.batch_normalization(tensor=tensor, name='batch_norm_1')
+        tensor = NetworkOps.leaky_relu(tensor=tensor, name='leaky_relu_1')
+
+        tensor = NetworkOps.conv(tensor=tensor, kernel_size=3, out_chan=out_chan, stride=1, name='conv2d_2',
+                                 trainable=trainable)
+        tensor = NetworkOps.batch_normalization(tensor=tensor, name='batch_norm_2')
+        tensor = NetworkOps.leaky_relu(tensor=tensor, name='leaky_relu_2')
+
+        tensor = NetworkOps.conv(tensor=tensor, kernel_size=1, out_chan=4 * out_chan, stride=1, name='conv2d_3',
+                                 trainable=trainable)
+        return NetworkOps.batch_normalization(tensor=tensor, name='batch_norm_3')
+
+    @classmethod
+    def _inception_residual(cls, in_tensor, out_chan, strides=1, trainable=True):
+        tensor = NetworkOps.conv(tensor=in_tensor, kernel_size=(1, 3), out_chan=out_chan, stride=(1, strides), name='conv2d_1',
+                                 trainable=trainable)
+        tensor = NetworkOps.batch_normalization(tensor=tensor, name='batch_norm_1')
+        tensor = NetworkOps.leaky_relu(tensor=tensor, name='leaky_relu_1')
+
+        tensor = NetworkOps.conv(tensor=tensor, kernel_size=(3, 1), out_chan=out_chan, stride=(strides, 1), name='conv2d_2',
+                                 trainable=trainable)
+        tensor = NetworkOps.batch_normalization(tensor=tensor, name='batch_norm_2')
+        tensor = NetworkOps.leaky_relu(tensor=tensor, name='leaky_relu_2')
+
+        tensor = NetworkOps.conv(tensor=tensor, kernel_size=(1, 3), out_chan=out_chan, stride=1, name='conv2d_3',
+                                 trainable=trainable)
+        tensor = NetworkOps.batch_normalization(tensor=tensor, name='batch_norm_3')
+        tensor = NetworkOps.leaky_relu(tensor=tensor, name='leaky_relu_3')
+
+        tensor = NetworkOps.conv(tensor=tensor, kernel_size=(3, 1), out_chan=out_chan, stride=1, name='conv2d_4',
+                                 trainable=trainable)
+        return NetworkOps.batch_normalization(tensor=tensor, name='batch_norm_4')
+
+    @classmethod
+    def _bottleneck_inception_residual(cls, in_tensor, out_chan, strides=1, trainable=True):
+        tensor = NetworkOps.conv(in_tensor, kernel_size=1, out_chan=out_chan, stride=strides, name='conv2d_1',
+                                 trainable=trainable)
+        tensor = NetworkOps.batch_normalization(tensor=tensor, name='batch_norm_1')
+        tensor = NetworkOps.leaky_relu(tensor=tensor, name='leaky_relu_1')
+
+        tensor = NetworkOps.conv(tensor=tensor, kernel_size=(1, 3), out_chan=out_chan, stride=1, name='conv2d_2',
+                                 trainable=trainable)
+        tensor = NetworkOps.batch_normalization(tensor=tensor, name='batch_norm_2')
+        tensor = NetworkOps.leaky_relu(tensor=tensor, name='leaky_relu_2')
+
+        tensor = NetworkOps.conv(tensor=tensor, kernel_size=(3, 1), out_chan=out_chan, stride=1, name='conv2d_3',
+                                 trainable=trainable)
+        tensor = NetworkOps.batch_normalization(tensor=tensor, name='batch_norm_3')
+        tensor = NetworkOps.leaky_relu(tensor=tensor, name='leaky_relu_3')
+
+        tensor = NetworkOps.conv(tensor=tensor, kernel_size=1, out_chan=4 * out_chan, stride=1, name='conv2d_4',
+                                 trainable=trainable)
+        return NetworkOps.batch_normalization(tensor=tensor, name='batch_norm_4')
+
+
+    @classmethod
+    def _shortcut(cls, in_tensor, out_chan, is_bottleneck, strides=1, trainable=True):
+        if is_bottleneck:
+            channels = 4 * out_chan
         else:
-            strides = 2
-        with tf.variable_scope(layer_name):
-            # Shortcut connection
-            shortcut = cls.conv(in_tensor, kernel_size=1, out_chan=out_chan, stride=strides, name='conv2d',
-                                trainable=trainable)
-            shortcut = cls.batch_normalization(tensor=shortcut, name='batch_norm', trainable=trainable)
-            # Residual
-            tensor = cls.conv(in_tensor, kernel_size=3, out_chan=out_chan, stride=strides, name='conv2d_1',
-                              trainable=trainable)
-            tensor = cls.batch_normalization(tensor=tensor, name='batch_norm_1')
-            tensor = cls.leaky_relu(tensor=tensor, name='leaky_relu_1')
-            tensor = cls.conv(tensor=tensor, kernel_size=3, out_chan=out_chan, stride=1, name='conv2d_2',
-                              trainable=trainable)
-            tensor = cls.batch_normalization(tensor=tensor, name='batch_norm_2')
-            # Merge
-            result = tf.add(tensor, shortcut)
-            # tensor = cls.leaky_relu(tensor=tensor, name='leaky_relu_2')  # http://torch.ch/blog/2016/02/04/resnets.html
-        return result
+            channels = out_chan
+        shortcut = NetworkOps.conv(in_tensor, kernel_size=1, out_chan=channels, stride=strides, name='conv2d',
+                                   trainable=trainable)
+        return NetworkOps.batch_normalization(tensor=shortcut, name='batch_norm', trainable=trainable)
 
     @classmethod
-    def resnet_vanilla(cls, in_tensor, layer_name, out_chan, trainable=True):
+    def vanilla(cls, in_tensor, layer_name, out_chan, first_layer, trainable=True):
         with tf.variable_scope(layer_name):
-            # Shortcut connection
-            shortcut = in_tensor
-            # Residual
-            tensor = cls.conv(in_tensor, kernel_size=3, out_chan=out_chan, stride=1, name='conv2d_1',
-                              trainable=trainable)
-            tensor = cls.batch_normalization(tensor=tensor, name='batch_norm_1')
-            tensor = cls.leaky_relu(tensor=tensor, name='leaky_relu_1')
-            tensor = cls.conv(tensor=tensor, kernel_size=3, out_chan=out_chan, stride=1, name='conv2d_2',
-                              trainable=trainable)
-            tensor = cls.batch_normalization(tensor=tensor, name='batch_norm_2')
-            # Merge
-            result = tf.add(tensor, shortcut)
-            # tensor = cls.leaky_relu(tensor=tensor, name='leaky_relu_2')  # http://torch.ch/blog/2016/02/04/resnets.html
-        return result
+            if first_layer:
+                if out_chan == cls.MINIMAL_LAYERS:
+                    strides = 1
+                else:
+                    strides = 2
+                shortcut = cls._shortcut(in_tensor, out_chan=out_chan, is_bottleneck=False, strides=strides, trainable=trainable)
+                residual = cls._vanilla_residual(in_tensor, out_chan=out_chan, strides=strides, trainable=trainable)
+            else:
+                shortcut = in_tensor
+                residual = cls._vanilla_residual(in_tensor, out_chan=out_chan, trainable=trainable)
+            return tf.add(residual, shortcut)
+            # tensor = NetworkOps.leaky_relu(tensor=tensor, name='leaky_relu_2')  # http://torch.ch/blog/2016/02/04/resnets.html
 
     @classmethod
-    def resnet_bottleneck_first(cls, in_tensor, layer_name, out_chan, trainable=True):
-        if out_chan == 64:
-            strides = 1
-        else:
-            strides = 2
+    def inception(cls, in_tensor, layer_name, out_chan, first_layer, trainable=True):
         with tf.variable_scope(layer_name):
-            # Shortcut connection
-            shortcut = cls.conv(in_tensor, kernel_size=1, out_chan=4*out_chan, stride=strides, name='conv2d',
-                                trainable=trainable)
-            shortcut = cls.batch_normalization(tensor=shortcut, name='batch_norm', trainable=trainable)
-            # Residual
-            tensor = cls.conv(in_tensor, kernel_size=1, out_chan=out_chan, stride=strides, name='conv2d_1',
-                              trainable=trainable)
-            tensor = cls.batch_normalization(tensor=tensor, name='batch_norm_1')
-            tensor = cls.leaky_relu(tensor=tensor, name='leaky_relu_1')
-            tensor = cls.conv(tensor=tensor, kernel_size=3, out_chan=out_chan, stride=1, name='conv2d_2',
-                              trainable=trainable)
-            tensor = cls.batch_normalization(tensor=tensor, name='batch_norm_2')
-            tensor = cls.leaky_relu(tensor=tensor, name='leaky_relu_2')
-            tensor = cls.conv(tensor=tensor, kernel_size=1, out_chan=4*out_chan, stride=1, name='conv2d_3',
-                              trainable=trainable)
-            tensor = cls.batch_normalization(tensor=tensor, name='batch_norm_3')
-            # Merge
-            tensor = tf.add(tensor, shortcut)
-            # tensor = cls.leaky_relu(tensor=tensor, name='leaky_relu_2')  # http://torch.ch/blog/2016/02/04/resnets.html
-        return tensor
+            if first_layer:
+                if out_chan == cls.MINIMAL_LAYERS:
+                    strides = 1
+                else:
+                    strides = 2
+                shortcut = cls._shortcut(in_tensor, out_chan=out_chan, is_bottleneck=False, strides=strides, trainable=trainable)
+                residual = cls._inception_residual(in_tensor, out_chan=out_chan, strides=strides, trainable=trainable)
+            else:
+                shortcut = in_tensor
+                residual = cls._inception_residual(in_tensor, out_chan=out_chan, trainable=trainable)
+            return tf.add(residual, shortcut)
+            # tensor = NetworkOps.leaky_relu(tensor=tensor, name='leaky_relu_2')  # http://torch.ch/blog/2016/02/04/resnets.html
 
     @classmethod
-    def resnet_bottleneck(cls, in_tensor, layer_name, out_chan, trainable=True):
+    def bottleneck(cls, in_tensor, layer_name, out_chan, first_layer, trainable=True):
         with tf.variable_scope(layer_name):
-            # Shortcut connection
-            shortcut = in_tensor
-            # Residual
-            tensor = cls.conv(in_tensor, kernel_size=1, out_chan=out_chan, stride=1, name='conv2d_1',
-                              trainable=trainable)
-            tensor = cls.batch_normalization(tensor=tensor, name='batch_norm_1')
-            tensor = cls.leaky_relu(tensor=tensor, name='leaky_relu_1')
-            tensor = cls.conv(tensor=tensor, kernel_size=3, out_chan=out_chan, stride=1, name='conv2d_2',
-                              trainable=trainable)
-            tensor = cls.batch_normalization(tensor=tensor, name='batch_norm_2')
-            tensor = cls.leaky_relu(tensor=tensor, name='leaky_relu_2')
-            tensor = cls.conv(tensor=tensor, kernel_size=1, out_chan=4*out_chan, stride=1, name='conv2d_3',
-                              trainable=trainable)
-            tensor = cls.batch_normalization(tensor=tensor, name='batch_norm_3')
-            # Merge
-            tensor = tf.add(tensor, shortcut)
-            # tensor = cls.leaky_relu(tensor=tensor, name='leaky_relu_2')  # http://torch.ch/blog/2016/02/04/resnets.html
-        return tensor
+            if first_layer:
+                if out_chan == cls.MINIMAL_LAYERS:
+                    strides = 1
+                else:
+                    strides = 2
+                shortcut = cls._shortcut(in_tensor, out_chan=out_chan, is_bottleneck=True, strides=strides, trainable=trainable)
+                residual = cls._bottleneck_residual(in_tensor, out_chan=out_chan, strides=strides, trainable=trainable)
+            else:
+                shortcut = in_tensor
+                residual = cls._bottleneck_residual(in_tensor, out_chan=out_chan, trainable=trainable)
+            return tf.add(residual, shortcut)
+            # tensor = NetworkOps.leaky_relu(tensor=tensor, name='leaky_relu_2')  # http://torch.ch/blog/2016/02/04/resnets.html
+
+    @classmethod
+    def bottleneck_inception(cls, in_tensor, layer_name, out_chan, first_layer, trainable=True):
+        with tf.variable_scope(layer_name):
+            if first_layer:
+                if out_chan == cls.MINIMAL_LAYERS // 2:
+                    strides = 1
+                else:
+                    strides = 2
+                shortcut = cls._shortcut(in_tensor, out_chan=out_chan, is_bottleneck=True, strides=strides, trainable=trainable)
+                residual = cls._bottleneck_inception_residual(in_tensor, out_chan=out_chan, strides=strides, trainable=trainable)
+            else:
+                shortcut = in_tensor
+                residual = cls._bottleneck_inception_residual(in_tensor, out_chan=out_chan, trainable=trainable)
+            return tf.add(residual, shortcut)
+            # tensor = NetworkOps.leaky_relu(tensor=tensor, name='leaky_relu_2')  # http://torch.ch/blog/2016/02/04/resnets.html
+
 
 
 class ImageOps(object):
