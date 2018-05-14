@@ -212,7 +212,7 @@ class ResNetOps(object):
                                          trainable=trainable)
                 tensor = NetworkOps.batch_normalization(tensor=tensor, name='batch_norm_2')
                 tensor = NetworkOps.leaky_relu(tensor=tensor, name='leaky_relu_2')
-                return NetworkOps.dropout(tensor=tensor, trainable=trainable, name='batch_norm_2')
+                return NetworkOps.dropout(tensor=tensor, trainable=trainable, name='dropout_2')
             else:
                 return tf.layers.average_pooling2d(in_tensor, pool_size=4, strides=1, data_format='channels_first',
                                                    padding='same', name='average_pool')

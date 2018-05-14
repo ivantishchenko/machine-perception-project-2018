@@ -12,11 +12,12 @@ CROPSIZE = 128
 KEYPOINT_COUNT = 21
 ACCURACY_BOX = 3
 TRAIN = True
+USE_4K = True
 
 resnet_channels = [64, 128, 256, 512]
-resnet_repetitions_18 = [2, 2, 2, 2]
-resnet_repetitions_34 = [3, 4, 6, 3]
-resnet_repetitions_50 = [3, 4, 6, 3]
+resnet_repetitions_small = [2, 2, 2, 2]
+resnet_repetitions_normal = [3, 4, 6, 3]
+resnet_repetitions_large = [3, 4, 23, 3]
 
 
 class ResNet(BaseModel):
@@ -30,16 +31,17 @@ class ResNet(BaseModel):
         rgb_image = input_tensors['img']
         keypoints = input_tensors['kp_2D']
 
-        with tf.variable_scope('resnet18-vanilla'):
+        with tf.variable_scope('resnet50_bottleneck_inception'):
             image = rop.init_block(rgb_image, trainable=TRAIN)
-            for i, layers in enumerate(resnet_repetitions_18):
+            for i, layers in enumerate(resnet_repetitions_normal):
                 for j in range(layers):
-                    image = rop.vanilla(image, layer_name='conv%d_%d' % (i + 2, j + 1), first_layer=(j == 0),
-                                        out_chan=resnet_channels[i], trainable=TRAIN)
-            image = rop.last_layer(image)
+                    image = rop.bottleneck_inception(image, layer_name='conv%d_%d' % (i + 2, j + 1),
+                                                     first_layer=(j == 0), out_chan=resnet_channels[i] // 2,
+                                                     trainable=TRAIN)
+            image = rop.last_layer(image, use_4k=USE_4K)
 
         with tf.variable_scope('flatten'):
-            result = rop.output_layer(image)
+            result = rop.output_layer(image, use_4k=False)
             result = tf.reshape(result, (-1, 21, 2))
 
         with tf.variable_scope('loss_calculation'):
