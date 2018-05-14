@@ -31,15 +31,15 @@ if __name__ == '__main__':
 
         # Define model
         from datasources import HDF5Source
-        from models import TrivialNet
-        model = TrivialNet(
+        from models import ResNet
+        model = ResNet(
             # Note: The same session must be used for the model and the data sources.
             session,
 
             learning_schedule=[
                 {
                     'loss_terms_to_optimize': {
-                        'kp_loss_mse': ['keypoints', 'flatten', 'loss_calculation'],
+                        'kp_loss_mse': ['resnet18-vanilla', 'flatten', 'loss_calculation'],
                     },
                     'metrics': ['kp_loss_mse', 'kp_accuracy'],
                     'learning_rate': 1e-4,

@@ -11,14 +11,6 @@ class NetworkOps(object):
     SEED = 42
 
     @classmethod
-    def scale_layer(cls, tensor):
-        with tf.variable_scope("scale", reuse=tf.AUTO_REUSE):
-            channel_num = tensor.shape[1]
-            alpha = tf.get_variable(name='alpha', shape=(channel_num,), trainable=True)
-            beta = tf.get_variable(name='beta', shape=(channel_num,), trainable=True)
-            return alpha * tensor + beta
-
-    @classmethod
     def leaky_relu(cls, tensor, name='leaky_relu'):
         return tf.nn.leaky_relu(tensor, cls.SLOPE_LRU, name=name)
 
@@ -110,8 +102,8 @@ class NetworkOps(object):
         )
 
     @classmethod
-    def dropout(cls, tensor, rate=-1, name='dropout', trainable=True):
-        if rate == -1:
+    def dropout(cls, tensor, rate=-1., name='dropout', trainable=True):
+        if rate == -1.:
             droprate = cls.DROPOUT
         else:
             droprate = rate
@@ -172,15 +164,11 @@ class NetworkOps(object):
             if maxpool:
                 # maxpool(relu(input)) == relu(maxpool(input)); this ordering is a tiny opt which is not general https://github.com/tensorflow/tensorflow/issues/3180#issuecomment-288389772
                 tensor = cls.max_pool(tensor=tensor)
-                # if enable_scale:
-                #     tensor = cls.scale_layer(tensor=tensor)
                 tensor = cls.leaky_relu(tensor=tensor)
                 tensor = cls.batch_normalization(tensor, trainable=trainable)  # https://github.com/ducha-aiki/caffenet-benchmark/blob/master/batchnorm.md
                 if not disable_dropout:
                     tensor = cls.dropout(tensor=tensor, trainable=trainable)
             else:
-                # if enable_scale:
-                #     tensor = cls.scale_layer(tensor=tensor)
                 tensor = cls.leaky_relu(tensor=tensor)
                 tensor = cls.batch_normalization(tensor, trainable=trainable)  # https://github.com/ducha-aiki/caffenet-benchmark/blob/master/batchnorm.md
                 if not disable_dropout:
@@ -188,7 +176,7 @@ class NetworkOps(object):
             return tensor
 
     @classmethod
-    def fc_lru(cls, in_tensor, layer_name, out_chan, droprate=0.5, disable_dropout=False, trainable=True):
+    def fc_relu(cls, in_tensor, layer_name, out_chan, droprate=0.5, disable_dropout=False, trainable=True):
         with tf.variable_scope(layer_name):
             tensor = cls.fully_connected(tensor=in_tensor, out_chan=out_chan, activation_fun=tf.nn.leaky_relu, trainable=trainable)
             if not disable_dropout:
@@ -196,41 +184,102 @@ class NetworkOps(object):
             return tensor
 
     @classmethod
-    def resnet_block_first(cls, in_tensor, layer_name, out_chan, stride=1, trainable=True):
-        in_chan = in_tensor.get_shape().as_list()[1]
+    def resnet_init_block(cls, in_tensor, trainable=True):
+        with tf.variable_scope('resnet_start'):
+            tensor = cls.conv(tensor=in_tensor, kernel_size=7, out_chan=64, stride=2, name='conv2d',
+                              trainable=trainable)
+            tensor = cls.batch_normalization(tensor=tensor, name='batch_norm')
+            tensor = cls.leaky_relu(tensor=tensor, name='leaky_relu')
+            tensor = cls.max_pool(tensor=tensor, pool=3, stride=2)
+            return tensor
+
+    @classmethod
+    def resnet_vanilla_first(cls, in_tensor, layer_name, out_chan, trainable=True):
+        if out_chan == 64:
+            strides = 1
+        else:
+            strides = 2
         with tf.variable_scope(layer_name):
             # Shortcut connection
-            if in_chan == out_chan:
-                if stride == 1:
-                    shortcut = tf.identity(in_tensor)
-                else:
-                    shortcut = cls.max_pool(tensor=in_tensor, pool=stride, stride=stride)
-            else:
-                shortcut = cls.conv(in_tensor, kernel_size=1, out_chan=out_chan, stride=stride, name='conv2d', trainable=trainable)
-                shortcut = cls.batch_normalization(tensor=shortcut, name='batch_norm', trainable=trainable)
+            shortcut = cls.conv(in_tensor, kernel_size=1, out_chan=out_chan, stride=strides, name='conv2d',
+                                trainable=trainable)
+            shortcut = cls.batch_normalization(tensor=shortcut, name='batch_norm', trainable=trainable)
             # Residual
-            tensor = cls.conv(in_tensor, kernel_size=3, out_chan=out_chan, stride=2, name='conv2d_1', trainable=trainable)
+            tensor = cls.conv(in_tensor, kernel_size=3, out_chan=out_chan, stride=strides, name='conv2d_1',
+                              trainable=trainable)
             tensor = cls.batch_normalization(tensor=tensor, name='batch_norm_1')
             tensor = cls.leaky_relu(tensor=tensor, name='leaky_relu_1')
-            tensor = cls.conv(tensor=tensor, kernel_size=3, out_chan=out_chan, stride=1, name='conv2d_2', trainable=trainable)
+            tensor = cls.conv(tensor=tensor, kernel_size=3, out_chan=out_chan, stride=1, name='conv2d_2',
+                              trainable=trainable)
             tensor = cls.batch_normalization(tensor=tensor, name='batch_norm_2')
+            # Merge
+            result = tf.add(tensor, shortcut)
+            # tensor = cls.leaky_relu(tensor=tensor, name='leaky_relu_2')  # http://torch.ch/blog/2016/02/04/resnets.html
+        return result
+
+    @classmethod
+    def resnet_vanilla(cls, in_tensor, layer_name, out_chan, trainable=True):
+        with tf.variable_scope(layer_name):
+            # Shortcut connection
+            shortcut = in_tensor
+            # Residual
+            tensor = cls.conv(in_tensor, kernel_size=3, out_chan=out_chan, stride=1, name='conv2d_1',
+                              trainable=trainable)
+            tensor = cls.batch_normalization(tensor=tensor, name='batch_norm_1')
+            tensor = cls.leaky_relu(tensor=tensor, name='leaky_relu_1')
+            tensor = cls.conv(tensor=tensor, kernel_size=3, out_chan=out_chan, stride=1, name='conv2d_2',
+                              trainable=trainable)
+            tensor = cls.batch_normalization(tensor=tensor, name='batch_norm_2')
+            # Merge
+            result = tf.add(tensor, shortcut)
+            # tensor = cls.leaky_relu(tensor=tensor, name='leaky_relu_2')  # http://torch.ch/blog/2016/02/04/resnets.html
+        return result
+
+    @classmethod
+    def resnet_bottleneck_first(cls, in_tensor, layer_name, out_chan, trainable=True):
+        if out_chan == 64:
+            strides = 1
+        else:
+            strides = 2
+        with tf.variable_scope(layer_name):
+            # Shortcut connection
+            shortcut = cls.conv(in_tensor, kernel_size=1, out_chan=4*out_chan, stride=strides, name='conv2d',
+                                trainable=trainable)
+            shortcut = cls.batch_normalization(tensor=shortcut, name='batch_norm', trainable=trainable)
+            # Residual
+            tensor = cls.conv(in_tensor, kernel_size=1, out_chan=out_chan, stride=strides, name='conv2d_1',
+                              trainable=trainable)
+            tensor = cls.batch_normalization(tensor=tensor, name='batch_norm_1')
+            tensor = cls.leaky_relu(tensor=tensor, name='leaky_relu_1')
+            tensor = cls.conv(tensor=tensor, kernel_size=3, out_chan=out_chan, stride=1, name='conv2d_2',
+                              trainable=trainable)
+            tensor = cls.batch_normalization(tensor=tensor, name='batch_norm_2')
+            tensor = cls.leaky_relu(tensor=tensor, name='leaky_relu_2')
+            tensor = cls.conv(tensor=tensor, kernel_size=1, out_chan=4*out_chan, stride=1, name='conv2d_3',
+                              trainable=trainable)
+            tensor = cls.batch_normalization(tensor=tensor, name='batch_norm_3')
             # Merge
             tensor = tf.add(tensor, shortcut)
             # tensor = cls.leaky_relu(tensor=tensor, name='leaky_relu_2')  # http://torch.ch/blog/2016/02/04/resnets.html
         return tensor
 
     @classmethod
-    def resnet_block(cls, in_tensor, layer_name, out_chan, trainable=True):
-        in_chan = in_tensor.get_shape().as_list()[1]
+    def resnet_bottleneck(cls, in_tensor, layer_name, out_chan, trainable=True):
         with tf.variable_scope(layer_name):
             # Shortcut connection
             shortcut = in_tensor
             # Residual
-            tensor = cls.conv(in_tensor, kernel_size=3, out_chan=out_chan, stride=1, name='conv2d_1', trainable=trainable)
+            tensor = cls.conv(in_tensor, kernel_size=1, out_chan=out_chan, stride=1, name='conv2d_1',
+                              trainable=trainable)
             tensor = cls.batch_normalization(tensor=tensor, name='batch_norm_1')
             tensor = cls.leaky_relu(tensor=tensor, name='leaky_relu_1')
-            tensor = cls.conv(tensor=tensor, kernel_size=3, out_chan=out_chan, stride=1, name='conv2d_2', trainable=trainable)
+            tensor = cls.conv(tensor=tensor, kernel_size=3, out_chan=out_chan, stride=1, name='conv2d_2',
+                              trainable=trainable)
             tensor = cls.batch_normalization(tensor=tensor, name='batch_norm_2')
+            tensor = cls.leaky_relu(tensor=tensor, name='leaky_relu_2')
+            tensor = cls.conv(tensor=tensor, kernel_size=1, out_chan=4*out_chan, stride=1, name='conv2d_3',
+                              trainable=trainable)
+            tensor = cls.batch_normalization(tensor=tensor, name='batch_norm_3')
             # Merge
             tensor = tf.add(tensor, shortcut)
             # tensor = cls.leaky_relu(tensor=tensor, name='leaky_relu_2')  # http://torch.ch/blog/2016/02/04/resnets.html

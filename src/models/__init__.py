@@ -14,4 +14,5 @@ from .example import ExampleNet
 from .ivan import NewModel
 from .mickey import Glover
 from .trivialnet import TrivialNet
-__all__ = ('ExampleNet', 'NewModel', 'Glover', 'TrivialNet')
+from .dressnet import ResNet
+__all__ = ('ExampleNet', 'NewModel', 'Glover', 'TrivialNet', 'ResNet')
