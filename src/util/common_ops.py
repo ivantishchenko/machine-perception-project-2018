@@ -119,7 +119,7 @@ class NetworkOps(object):
     @classmethod
     def fully_connected(cls, tensor, out_chan, activation_fun=None, name='full_conn', trainable=True):
         if activation_fun is tf.nn.leaky_relu:
-            return tf.nn.leaky_relu(
+            return cls.leaky_relu(
                 tf.contrib.layers.fully_connected(
                     inputs=tensor,
                     num_outputs=out_chan,
@@ -135,9 +135,7 @@ class NetworkOps(object):
                     outputs_collections=None,
                     trainable=trainable,
                     scope=None
-                ),
-                alpha=cls.SLOPE_LRU,
-                name=name
+                )
             )
         else:
             return tf.contrib.layers.fully_connected(
