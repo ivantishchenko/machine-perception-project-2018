@@ -6,7 +6,7 @@ import tensorflow as tf
 
 # HYPER PARAMETER TUNINGS HERE
 BATCHSIZE = 32
-EPOCHS = 25
+EPOCHS = 20
 
 if __name__ == '__main__':
 
@@ -23,8 +23,10 @@ if __name__ == '__main__':
 
     # Initialize Tensorflow session
     tf.logging.set_verbosity(tf.logging.INFO)
-    gpu_options = tf.GPUOptions(allow_growth=True)
-    with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as session:
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
+    # config.log_device_placement = True
+    with tf.Session(config=config) as session:
 
         # Declare some parameters
         batch_size = BATCHSIZE
@@ -39,7 +41,7 @@ if __name__ == '__main__':
             learning_schedule=[
                 {
                     'loss_terms_to_optimize': {
-                        'kp_loss_mse': ['resnet101_bottleneck', 'flatten', 'loss_calculation'],
+                        'kp_loss_mse': ['resnet18', 'flatten', 'loss_calculation'],
                     },
                     'metrics': ['kp_loss_mse', 'kp_accuracy'],
                     'learning_rate': 1e-4,
@@ -55,7 +57,7 @@ if __name__ == '__main__':
                     batch_size,
                     hdf_path='../datasets/training.h5',
                     keys_to_use=['train'],
-                    min_after_dequeue=2000,
+                    min_after_dequeue=4000,
                 ),
             },
 
@@ -66,6 +68,7 @@ if __name__ == '__main__':
             #         hdf_path='../datasets/dataset.h5',
             #         keys_to_use=['validate'],
             #         testing=True,
+            #         validation=True
             #     ),
             # },
         )

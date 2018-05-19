@@ -173,7 +173,7 @@ class SummaryManager(object):
         `tf.layers.conv2d` or for the filters to be defined in the same scope as the output tensor.
         """
         assert 'data_format' not in kwargs
-        with tf.name_scope('viz_filters'):
+        with tf.name_scope('conv-filter'):
             # Find tensor holding trainable kernel weights
             name_stem = '/'.join(tensor.name.split('/')[:-1]) + '/kernel'
             matching_tensors = [t for t in tf.trainable_variables() if t.name.startswith(name_stem)]
@@ -194,7 +194,7 @@ class SummaryManager(object):
     def feature_maps(self, name, tensor, mean_across_channels=True, data_format='channels_last',
                      **kwargs):
         """Log summary of feature maps / image activations."""
-        with tf.name_scope('viz_featuremaps'):
+        with tf.name_scope('feature-map'):
             if data_format == 'channels_first':
                 # N x C x H x W
                 tensor = tf.transpose(tensor, perm=(0, 2, 3, 1))

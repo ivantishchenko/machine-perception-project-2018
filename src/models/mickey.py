@@ -3,14 +3,13 @@ from typing import Dict
 import tensorflow as tf
 import numpy as np
 from core import BaseDataSource, BaseModel
-from util.common_ops import NetworkOps as nop
+from util.common_ops import BasicLayers as bl
 from util.common_ops import ImageOps as iop
 
 # HYPER PARAMETERS
 CROP_SIZE = 128
 KEYPOINT_COUNT = 21
 HEATMAP_SIZE = 16
-TRAIN = True
 
 
 class Glover(BaseModel):
@@ -43,6 +42,7 @@ class Glover(BaseModel):
         #                         back_prop=False)
         # hm_gt_fs = tf.stack(hm_gt_fs)
         # hm_gt_fs = tf.transpose(hm_gt_fs, perm=[1, 0, 2, 3])
+        layers = bl(self.summary)
 
         with tf.variable_scope('keypoints'):
             layers_per_block = [2, 2, 4, 5]
@@ -53,15 +53,13 @@ class Glover(BaseModel):
             image = rgb_image
             for block_id, (layer_num, chan_num, pool) in enumerate(zip(layers_per_block, out_chan_list, pool_list), 1):
                 for layer_id in range(layer_num):
-                    image = nop.conv_relu(image, 'conv%d_%d' % (block_id, layer_id + 1), kernel_size=3, out_chan=chan_num, maxpool=(True if layer_id == range(layer_num)[-1] and pool else False), trainable=TRAIN)
-                    print('conv{}_{}: output_dims={}'.format(block_id, layer_id+1, image.get_shape()))
+                    image = layers.conv_relu(image, 'conv%d_%d' % (block_id, layer_id + 1), kernel_size=3,
+                                             out_chan=chan_num, is_training=self.is_training,
+                                             maxpool=(True if layer_id == range(layer_num)[-1] and pool else False))
 
-            downsampled_map = nop.conv_relu(image, 'conv4_D', kernel_size=3, out_chan=64, trainable=TRAIN)
-            print('conv4_D: output_dims={}'.format(downsampled_map.get_shape()))
-            image = nop.conv_relu(downsampled_map, 'conv5_1', kernel_size=1, out_chan=256, trainable=TRAIN)
-            print('conv5_1: output_dims={}'.format(image.get_shape()))
-            scoremap = nop.conv(image, kernel_size=1, out_chan=KEYPOINT_COUNT, name='conv5_P', trainable=TRAIN)
-            print('conv5_P: output_dims={}'.format(scoremap.get_shape()))
+            downsampled_map = layers.conv_relu(image, 'conv4_D', kernel_size=3, out_chan=64, is_training=self.is_training)
+            image = layers.conv_relu(downsampled_map, 'conv5_1', kernel_size=1, out_chan=256, is_training=self.is_training)
+            scoremap = layers._conv(image, kernel_size=1, out_chan=KEYPOINT_COUNT, is_training=self.is_training, name='conv5_P')
             scoremap_list.append(scoremap)
 
             # iterate recurrent part a couple of times
@@ -71,17 +69,13 @@ class Glover(BaseModel):
             for pass_id in range(num_recurrent_units):
                 image = tf.concat([scoremap_list[-1], downsampled_map], 1)
                 for rec_id in range(layers_per_recurrent_unit):
-                    image = nop.conv_relu(image, 'conv%d_%d' % (pass_id + offset, rec_id + 1), kernel_size=5, out_chan=64, trainable=TRAIN)
-                    print('conv{}_{}: output_dims={}'.format(pass_id + offset, rec_id+1, image.get_shape()))
-                image = nop.conv_relu(image, 'conv%d_%d' % (pass_id + offset, layers_per_recurrent_unit + 1), kernel_size=1, out_chan=64, trainable=TRAIN)
-                print('conv{}_{}: output_dims={}'.format(pass_id + offset, layers_per_recurrent_unit+1, image.get_shape()))
-                scoremap = nop.conv(image, kernel_size=1, out_chan=KEYPOINT_COUNT, name='conv%d_P' % (pass_id + offset), trainable=TRAIN)
-                print('conv{}_P: output_dims={}'.format(pass_id + offset, scoremap.get_shape()))
+                    image = layers.conv_relu(image, 'conv%d_%d' % (pass_id + offset, rec_id + 1), kernel_size=5, out_chan=64, is_training=self.is_training)
+                image = layers.conv_relu(image, 'conv%d_%d' % (pass_id + offset, layers_per_recurrent_unit + 1), kernel_size=1, out_chan=64, is_training=self.is_training)
+                scoremap = layers._conv(image, kernel_size=1, out_chan=KEYPOINT_COUNT, is_training=self.is_training, name='conv%d_P' % (pass_id + offset))
                 scoremap_list.append(scoremap)
 
         with tf.variable_scope('upscale_pred'):
-            pred_upscale = scoremap_list[-1]
-            pred_upscale = tf.transpose(pred_upscale, [0, 2, 3, 1])
+            pred_upscale = tf.transpose(scoremap_list[-1], [0, 2, 3, 1])
             pred_upscale = tf.image.resize_images(pred_upscale, (CROP_SIZE, CROP_SIZE), method=tf.image.ResizeMethod.BICUBIC, align_corners=True)
             pred_upscale = tf.transpose(pred_upscale, [0, 3, 1, 2])
 

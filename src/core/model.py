@@ -15,6 +15,19 @@ from .checkpoint_manager import CheckpointManager
 import logging
 logger = logging.getLogger(__name__)
 
+# def Caching(e):
+#     def wrapper(f):
+#         return f
+#     print e
+#     return wrapper
+# @Override("fsdfsd")
+# def sdfdsf():
+#     sdfsdf
+#
+# sdfdsf = Override("fsdfsd")(sdfdsf)
+# print "fsdfsd"
+# sddsf = sdfdsf
+# @Override
 
 class BaseModel(object):
     """Base model class for Tensorflow-based model construction.
@@ -66,8 +79,8 @@ class BaseModel(object):
         self._tester = LiveTester(self, self._test_data)
 
         # Run-time parameters
-        self.is_training = tf.placeholder(tf.bool)
-        self.use_batch_statistics = tf.placeholder(tf.bool)
+        self.is_training = tf.placeholder(tf.bool, name='is_training')
+        self.use_batch_statistics = tf.placeholder(tf.bool, name='use_batch_statistics')
 
         self._build_all_models()
 
@@ -239,7 +252,7 @@ class BaseModel(object):
             self.time.end('train_iteration')
 
             # Print progress
-            to_print = '%07d/%07d> ' % (current_step, num_steps)
+            to_print = 'Train: %07d/%07d> ' % (current_step, num_steps)
             to_print += ', '.join(['%s = %f' % (k, v)
                                    for k, v in zip(loss_term_keys, outcome['loss_terms'])])
             self.time.log_every('train_iteration', to_print, seconds=5)

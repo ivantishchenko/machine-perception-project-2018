@@ -116,7 +116,7 @@ class HDF5Source(BaseDataSource):
         img = entry['img'].transpose(1, 2, 0)
         img = img / 255.0
 
-        if not self.testing:
+        if self.validation or not self.testing:
             kp_2D = entry['kp_2D']
             img, kp_2D = crop_hand(img, kp_2D)
             img, kp_2D = resize(img, kp_2D, res_size)
