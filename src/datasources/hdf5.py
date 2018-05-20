@@ -102,7 +102,7 @@ class HDF5Source(BaseDataSource):
                 key, index = self._index_to_key[current_index]
                 data = self._hdf5[key]
                 entry = {}
-                for name in ('img', 'kp_2D'):
+                for name in ('img', 'kp_2D', 'vis_2D'):
                     if name in data:
                         entry[name] = data[name][index, :]
                 yield entry

@@ -10,6 +10,7 @@ from util.common_ops import ImageOps as iop
 CROP_SIZE = 128
 KEYPOINT_COUNT = 21
 HEATMAP_SIZE = 16
+ACCURACY_DISTANCE = 2
 
 
 class Glover(BaseModel):
@@ -20,28 +21,22 @@ class Glover(BaseModel):
         input_tensors = data_source.output_tensors
         print(data_source.output_tensors)
         rgb_image = input_tensors['img']
-        print('rgb_image_dims={}'.format(rgb_image.get_shape()))
         keypoints = input_tensors['kp_2D']
-        print('keypoint_dims={}'.format(keypoints.get_shape()))
-        hm_gt, _ = tf.map_fn(lambda i: iop.get_single_heatmap(i, HEATMAP_SIZE, 1.0, CROP_SIZE // HEATMAP_SIZE, True),
-                             tf.nn.embedding_lookup(keypoints, np.array(range(keypoints.shape[0]))),
-                             dtype=([tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
-                                    tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
-                                    tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
-                                    ], tf.float32),
-                             back_prop=False)
-        hm_gt = tf.stack(hm_gt)
-        hm_gt = tf.transpose(hm_gt, perm=[1, 0, 2, 3])
-        print('heatmap_dims={}'.format(hm_gt))
-        # hm_gt_fs, _ = tf.map_fn(lambda i: iop.get_single_heatmap(i, CROP_SIZE, 1.0, CROP_SIZE // CROP_SIZE),
-        #                         tf.nn.embedding_lookup(keypoints, np.array(range(keypoints.shape[0]))),
-        #                         dtype=([tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
-        #                                 tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
-        #                                 tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
-        #                                 ], tf.float32),
-        #                         back_prop=False)
-        # hm_gt_fs = tf.stack(hm_gt_fs)
-        # hm_gt_fs = tf.transpose(hm_gt_fs, perm=[1, 0, 2, 3])
+        is_visible = input_tensors['vis_2D']
+
+        def generate_heatmaps(kp, length, dev = 1.0):
+            heatmap, _ = tf.map_fn(lambda i: iop.get_single_heatmap(i, length, dev, CROP_SIZE // length, True),
+                                   tf.nn.embedding_lookup(kp, np.array(range(kp.shape[0]))),
+                                   dtype=([tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
+                                           tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
+                                           tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
+                                          ], tf.float32),
+                                   back_prop=False)
+            return tf.transpose(tf.stack(heatmap), perm=[1, 0, 2, 3])
+
+        hm_gt = generate_heatmaps(keypoints, HEATMAP_SIZE)
+        # hm_gt_fs = generate_heatmaps(keypoints, CROP_SIZE)
+
         layers = bl(self.summary)
 
         with tf.variable_scope('keypoints'):

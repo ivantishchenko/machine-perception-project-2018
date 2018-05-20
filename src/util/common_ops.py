@@ -469,6 +469,57 @@ class LossFuncs(object):
         with tf.variable_scope(layer_name):
             return tf.losses.mean_squared_error(ground_truth, predictions, axis=1)
 
+    @classmethod
+    def residual_distances(cls, gt_point, pred_point, layer_name='res_dist'):
+        with tf.variable_scope(layer_name):
+            distance = tf.subtract(gt_point, pred_point)
+            squared_diff = tf.square(distance)
+            return tf.reduce_sum(squared_diff)
+
+    @classmethod
+    def residual_distances_vis(cls, gt_point, pred_point, visibility, layer_name='res_dist_vis'):
+        with tf.variable_scope(layer_name):
+            distance = tf.subtract(gt_point, pred_point)
+            visible_distance = tf.mul(distance, visibility)
+            squared_diff = tf.square(visible_distance)
+            return tf.reduce_sum(squared_diff)
+
+    @classmethod
+    def euclidean_distance(cls, gt_point, pred_point, visibility, layer_name='euc_dist'):
+        with tf.variable_scope(layer_name):
+            if len(visibility) == len(gt_point):
+                sum_residuals = cls.residual_distances_vis(gt_point, pred_point, visibility)
+            else:
+                sum_residuals = cls.residual_distances(gt_point, pred_point)
+            return tf.sqrt(sum_residuals)
+
+    @classmethod
+    def rmse(cls, gt_point, pred_point, visibility, layer_name='rmse'):
+        with tf.variable_scope(layer_name):
+            if len(visibility) == len(gt_point):
+                sum_residuals = cls.residual_distances_vis(gt_point, pred_point, visibility)
+            else:
+                sum_residuals = cls.residual_distances(gt_point, pred_point)
+            return tf.sqrt(tf.truediv(sum_residuals / len(pred_point)))
+
+    @classmethod
+    def accuracy_euclidean_distance(cls, gt_point, pred_point, max_distance, layer_name='accuracy'):
+        with tf.variable_scope(layer_name):
+            distance = tf.subtract(gt_point, pred_point)
+            squared_diff = tf.square(distance)
+            close_enough = tf.less_equal(squared_diff, max_distance)
+            return tf.count_nonzero(close_enough)
+
+    @classmethod
+    def accuracy_euclidean_distance_vis(cls, gt_point, pred_point, max_distance, visibility, layer_name='accuracy_vis'):
+        with tf.variable_scope(layer_name):
+            distance = tf.subtract(gt_point, pred_point)
+            visible_distance = tf.mul(distance, visibility)
+            squared_diff = tf.square(visible_distance)
+            close_enough = tf.less_equal(squared_diff, max_distance)
+            return tf.count_nonzero(close_enough)
+
+
 class ImageOps(object):
     @classmethod
     def make_gaussian(cls, size, sigma=3, centre=None, normalized=False):

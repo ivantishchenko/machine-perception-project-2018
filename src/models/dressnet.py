@@ -8,7 +8,7 @@ from util.common_ops import ResNetLayers as rnl
 
 # HYPER PARAMETERS
 CROPSIZE = 128
-ACCURACY_BOX = 3
+ACCURACY_BOX = 2
 USE_4K = False
 
 resnet_channels = [64, 128, 256, 512]
@@ -26,16 +26,17 @@ class ResNet(BaseModel):
         input_tensors = data_source.output_tensors
         rgb_image = input_tensors['img']
         keypoints = input_tensors['kp_2D']
+        is_visible = input_tensors['vis_2D']
         resnet = rnl(self.summary, True)
 
-        with tf.variable_scope('resnet18'):
+        with tf.variable_scope('resnet34'):
             image = resnet.init_block(rgb_image, self.is_training)
-            for i, layers in enumerate(resnet_repetitions_small):
+            for i, layers in enumerate(resnet_repetitions_normal):
                 for j in range(layers):
                     image = resnet.vanilla(image, layer_name='conv%d_%d' % (i + 2, j + 1),
                                               first_layer=(j == 0), out_chan=resnet_channels[i],
                                               is_training=self.is_training)
-            image = resnet._max_pool(image, pool=4)
+            # image = resnet._max_pool(image, pool=4)
             image = resnet.last_layer(image, is_training=self.is_training, use_4k=False)
             self.summary.histogram('last_layer', image)
             self.summary.feature_maps('last_layer', image)
