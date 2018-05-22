@@ -41,7 +41,7 @@ if __name__ == '__main__':
             learning_schedule=[
                 {
                     'loss_terms_to_optimize': {
-                        'kp_loss_mse': ['resnet18', 'flatten', 'loss_calculation'],
+                        'kp_loss_mse': ['resnet50', 'flatten', 'loss_calculation'],
                     },
                     'metrics': ['kp_loss_mse', 'kp_accuracy', 'kp_loss_mse_vis', 'kp_accuracy_vis'],
                     'learning_rate': 1e-4,

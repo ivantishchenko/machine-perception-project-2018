@@ -107,32 +107,58 @@ class BasicLayers(object):
         return layer
 
     def _batch_normalization(self, tensor, is_training, use_batch_stats=True, name='batch_norm'):
-        layer = tf.layers.batch_normalization(
+        # layer = tf.layers.batch_normalization(
+        #     inputs=tensor,
+        #     axis=self.CHANNEL_AXIS,
+        #     momentum=0.95,
+        #     epsilon=0.001,
+        #     center=True,
+        #     scale=True,
+        #     beta_initializer=tf.zeros_initializer(),
+        #     gamma_initializer=tf.ones_initializer(),
+        #     moving_mean_initializer=tf.zeros_initializer(),
+        #     moving_variance_initializer=tf.ones_initializer(),
+        #     beta_regularizer=None,
+        #     gamma_regularizer=None,
+        #     beta_constraint=None,
+        #     gamma_constraint=None,
+        #     training=is_training,  # use batch stats?
+        #     name=name,
+        #     reuse=None,
+        #     renorm=False,
+        #     renorm_clipping=None,
+        #     renorm_momentum=0.99,
+        #     fused=None,
+        #     virtual_batch_size=None,
+        #     adjustment=None
+        # )
+        layer = tf.contrib.layers.batch_norm(
             inputs=tensor,
-            axis=self.CHANNEL_AXIS,
-            momentum=0.95,
-            epsilon=0.001,
+            decay=0.95,  # 0.999
             center=True,
-            scale=True,
-            beta_initializer=tf.zeros_initializer(),
-            gamma_initializer=tf.ones_initializer(),
-            moving_mean_initializer=tf.zeros_initializer(),
-            moving_variance_initializer=tf.ones_initializer(),
-            beta_regularizer=None,
-            gamma_regularizer=None,
-            beta_constraint=None,
-            gamma_constraint=None,
-            training=is_training,  # use batch stats?
-            name=name,
+            scale=True,  # False
+            epsilon=0.001,
+            activation_fn=None,
+            param_initializers=None,
+            param_regularizers=None,
+            updates_collections=None,  # tf.GraphKeys.UPDATE_OPS,
+            is_training=is_training,  # True
             reuse=None,
+            variables_collections=None,
+            outputs_collections=None,
+            trainable=True,
+            batch_weights=None,
+            fused=None,
+            data_format='NCHW',  #DATA_FORMAT_NHWC
+            zero_debias_moving_mean=False,
+            scope=None,
             renorm=False,
             renorm_clipping=None,
-            renorm_momentum=0.99,
-            fused=None,
-            virtual_batch_size=None,
+            renorm_decay=0.99,
             adjustment=None
         )
         if self.visualize:
+            name = 'BatchNorm'
             self.summary.feature_maps(name, layer)
             self.summary.histogram(name + '/layer', layer)
             with tf.variable_scope(name, reuse=True):
@@ -146,31 +172,6 @@ class BasicLayers(object):
                 # self.summary.histogram(name + '/moving_mean', moving_mean)
                 # self.summary.histogram(name + '/moving_variance', moving_variance)
         return layer
-        # return tf.contrib.layers.batch_norm(
-        #     inputs=tensor,
-        #     decay=0.95,  # 0.999
-        #     center=True,
-        #     scale=True,  # False
-        #     epsilon=0.001,
-        #     activation_fn=None,
-        #     param_initializers=None,
-        #     param_regularizers=None,
-        #     updates_collections=tf.GraphKeys.UPDATE_OPS,
-        #     is_training=True,  # True
-        #     reuse=None,
-        #     variables_collections=None,
-        #     outputs_collections=None,
-        #     trainable=True,
-        #     batch_weights=None,
-        #     fused=None,
-        #     data_format='NCHW',  #DATA_FORMAT_NHWC
-        #     zero_debias_moving_mean=False,
-        #     scope=None,
-        #     renorm=False,
-        #     renorm_clipping=None,
-        #     renorm_decay=0.99,
-        #     adjustment=None
-        # )
 
     def _dropout(self, tensor, is_training, rate=-1., name='dropout'):
         if rate == -1.:
