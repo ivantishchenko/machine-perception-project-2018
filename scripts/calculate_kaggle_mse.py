@@ -8,7 +8,6 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__) + '/../src/'))
-from util.gaze import mean_angular_error  # noqa
 
 # Parse arguments
 parser = argparse.ArgumentParser(description='Calculate Kaggle private test subset MSE metric.')

@@ -18,6 +18,7 @@ setup(
             'numpy',
             'opencv-python',
             'pandas',
-            'tensorflow'
+            'tensorflow',
+            'git+https://github.com/aleju/imgaug'
         ],
 )
