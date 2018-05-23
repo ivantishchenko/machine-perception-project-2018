@@ -120,8 +120,9 @@ class HDF5Source(BaseDataSource):
             kp_2D = entry['kp_2D']
             img, kp_2D = crop_hand(img, kp_2D)
             img, kp_2D = resize(img, kp_2D, res_size)
+            # AUGMENTATION PART BEG
+            # AUGMENTATION PART END
             entry['kp_2D'] = kp_2D
-            # AUGMENTATION PART
 
         entry['img'] = img.transpose(2,0,1)
 
