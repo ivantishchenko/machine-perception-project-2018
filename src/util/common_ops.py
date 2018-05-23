@@ -51,9 +51,9 @@ class BasicLayers(object):
         # print('\n'.join(str(e) for e in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)))
         # print('==========')
         if self.visualize:
-            self.summary.filters(name, layer)
-            self.summary.feature_maps(name, layer)
-            self.summary.histogram(name + '/layer', layer)
+            # self.summary.filters(name, layer)
+            # self.summary.feature_maps(name, layer)
+            # self.summary.histogram(name + '/layer', layer)
             with tf.variable_scope(name, reuse=True):
                 kernel = tf.get_variable('kernel')
                 bias = tf.get_variable('bias')
@@ -102,7 +102,7 @@ class BasicLayers(object):
             name=name
         )
         if self.visualize:
-            self.summary.feature_maps(name, layer)
+            # self.summary.feature_maps(name, layer)
             self.summary.histogram(name + '/layer', layer)
         return layer
 
@@ -159,8 +159,8 @@ class BasicLayers(object):
         )
         if self.visualize:
             name = 'BatchNorm'
-            self.summary.feature_maps(name, layer)
-            self.summary.histogram(name + '/layer', layer)
+            # self.summary.feature_maps(name, layer)
+            # self.summary.histogram(name + '/layer', layer)
             with tf.variable_scope(name, reuse=True):
                 gamma = tf.get_variable('gamma')
                 beta = tf.get_variable('beta')
@@ -190,7 +190,7 @@ class BasicLayers(object):
         print('\n'.join(str(e) for e in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)))
         print('==========')
         if self.visualize:
-            self.summary.feature_maps(name, layer)
+            # self.summary.feature_maps(name, layer)
             self.summary.histogram(name + '/layer', layer)
         return layer
 

@@ -28,7 +28,7 @@ class ResNet(BaseModel):
         is_visible = input_tensors['vis_2D']
         resnet = rnl(self.summary, True)
 
-        with tf.variable_scope('resnet50'):
+        with tf.variable_scope('resnet68'):
             image = resnet.init_block(rgb_image, self.is_training)
             for i, layers in enumerate(resnet_repetitions_normal):
                 for j in range(layers):
