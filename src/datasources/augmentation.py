@@ -5,10 +5,19 @@ from imgaug import augmenters as iaa
 import imgaug as ia
 import numpy as np
 
+NUM_TRANSFORMATIONS = 8
 colours={0:'black', 1:'blue', 2:'orange', 3:'green', 4:'red', 5:'yellow'}
 
 """TRANSFORMATIONS"""
-"""Change hue"""
+"""Perform salt and pepper"""
+def salt_pepper(img, kp_2D, val=0.01):
+    seq = iaa.Sequential([
+        iaa.SaltAndPepper(val)
+    ])
+    image_aug = seq.augment_image(img)
+    return image_aug, kp_2D
+
+"""Perform dropout"""
 def dropout(img, kp_2D, val=0.01):
     seq = iaa.Sequential([
         iaa.Dropout(val)

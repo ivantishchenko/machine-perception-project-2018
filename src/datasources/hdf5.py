@@ -121,8 +121,46 @@ class HDF5Source(BaseDataSource):
             img, kp_2D = crop_hand(img, kp_2D)
             img, kp_2D = resize(img, kp_2D, res_size)
             # AUGMENTATION PART BEG
+            augmentation_flag = np.random.binomial(1, 0.7)
+            if augmentation_flag == 0:
+                # SELECT COMBINATIONS
+                op_array = np.random.randint(2, size=aug.NUM_TRANSFORMATIONS)
+                if op_array[0] == 1:
+                    img, kp_2D = aug.flip_horizontal(img, kp_2D)
+                if op_array[1] == 1:
+                    img, kp_2D = aug.flip_vertical(img, kp_2D)
+                if op_array[2] == 1:
+                    img, kp_2D = aug.rotate(img, kp_2D)
+                if op_array[3] == 1:
+                    img, kp_2D = aug.shear(img, kp_2D)
+                if op_array[4] == 1:
+                    img, kp_2D = aug.change_contrast(img, kp_2D)
+                if op_array[5] == 1:
+                    img, kp_2D = aug.change_brightness(img, kp_2D)
+                if op_array[6] == 1:
+                    img, kp_2D = aug.dropout(img, kp_2D)
+                if op_array[7] == 1:
+                    img, kp_2D = aug.salt_pepper(img, kp_2D)
+                # UNIFORM RANDOM SELECT TRANSFORMATION
+                # transofrmation = np.random.randint(0, high=aug.NUM_TRANSFORMATIONS)
+                # if transofrmation == 0:
+                #     img, kp_2D = aug.flip_horizontal(img, kp_2D)
+                # if transofrmation == 1:
+                #     img, kp_2D = aug.flip_vertical(img, kp_2D)
+                # if transofrmation == 2:
+                #     img, kp_2D = aug.rotate(img, kp_2D)
+                # if transofrmation == 3:
+                #     img, kp_2D = aug.shear(img, kp_2D)
+                # if transofrmation == 4:
+                #     img, kp_2D = aug.change_contrast(img, kp_2D)
+                # if transofrmation == 5:
+                #     img, kp_2D = aug.change_brightness(img, kp_2D)
+                # if transofrmation == 6:
+                #     img, kp_2D = aug.dropout(img, kp_2D)
             # AUGMENTATION PART END
             entry['kp_2D'] = kp_2D
+
+
 
         entry['img'] = img.transpose(2,0,1)
 
