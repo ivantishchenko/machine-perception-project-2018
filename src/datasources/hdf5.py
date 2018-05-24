@@ -141,6 +141,8 @@ class HDF5Source(BaseDataSource):
                     img, kp_2D = aug.dropout(img, kp_2D)
                 if op_array[7] == 1:
                     img, kp_2D = aug.salt_pepper(img, kp_2D)
+
+                entry['vis_2D'] = aug.check_vis(kp_2D)
                 # UNIFORM RANDOM SELECT TRANSFORMATION
                 # transofrmation = np.random.randint(0, high=aug.NUM_TRANSFORMATIONS)
                 # if transofrmation == 0:

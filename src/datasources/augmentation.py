@@ -5,6 +5,7 @@ from imgaug import augmenters as iaa
 import imgaug as ia
 import numpy as np
 
+NUM_JOINTS = 21
 NUM_TRANSFORMATIONS = 8
 colours={0:'black', 1:'blue', 2:'orange', 3:'green', 4:'red', 5:'yellow'}
 
@@ -45,8 +46,7 @@ def change_contrast(img, kp_2D, factor=(0.999, 1.001)):
 def shear(img, kp_2D, angle=30):
     seq = iaa.Sequential([
         iaa.Affine(
-            shear=angle,
-            scale=0.7
+            shear=angle
         )
     ])
     image_aug, keypoints_aug = perform_augmentation_all(seq, img, kp_2D)
@@ -61,11 +61,7 @@ def rotate(img, kp_2D, angle=90):
         transofrm = iaa.Affine(rotate=angle, scale=0.7)
         
     seq = iaa.Sequential([transofrm])
-    
     image_aug, keypoints_aug = perform_augmentation_all(seq, img, kp_2D)
-    # for entry in keypoints_aug:
-    #     if entry[0] > 128 or entry[1] > 128 or entry[0] < 0 or entry[1] < 0:
-    #         print('Lucky')
     return image_aug, keypoints_aug
 
 """Do a vertical flip img + kp"""
@@ -85,8 +81,26 @@ def flip_horizontal(img, kp_2D):
     image_aug, keypoints_aug = perform_augmentation_all(seq, img, kp_2D)
     return image_aug, keypoints_aug
 
-"""INTERNAL FUNCTIONS"""
+"""Check visivbility of the keypoints"""
+def check_vis(keypoints_aug):
+    vis1 = np.any(keypoints_aug > 128, axis=1)
+    vis2 = np.any(keypoints_aug < 0, axis=1)
 
+    # do nor
+    vis = ~(vis1+vis2)
+    vis = vis.astype(int)
+
+    return vis.reshape(21, 1)
+
+# def check_vis_inif(keypoints_aug):
+#     vis = np.ones((21, 1))
+#     for i in range(len(keypoints_aug)):
+#         if keypoints_aug[i][0] > 128 or keypoints_aug[i][1] > 128 or keypoints_aug[i][0] < 0 or keypoints_aug[i][1] < 0:
+#             vis[i] = 0
+#     return vis
+
+
+"""INTERNAL FUNCTIONS"""
 def perform_augmentation_all(seq, img, kp_2D):
     # create keypoints object
     keypoints = create_keypoints_object(kp_2D, img.shape)
