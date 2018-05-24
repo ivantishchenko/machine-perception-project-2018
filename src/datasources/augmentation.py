@@ -63,9 +63,9 @@ def rotate(img, kp_2D, angle=90):
     seq = iaa.Sequential([transofrm])
     
     image_aug, keypoints_aug = perform_augmentation_all(seq, img, kp_2D)
-    for entry in keypoints_aug:
-        if entry[0] > 128 or entry[1] > 128 or entry[0] < 0 or entry[1] < 0:
-            print('Lucky')
+    # for entry in keypoints_aug:
+    #     if entry[0] > 128 or entry[1] > 128 or entry[0] < 0 or entry[1] < 0:
+    #         print('Lucky')
     return image_aug, keypoints_aug
 
 """Do a vertical flip img + kp"""
