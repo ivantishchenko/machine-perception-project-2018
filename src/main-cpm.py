@@ -5,8 +5,8 @@ import coloredlogs
 import tensorflow as tf
 
 # HYPER PARAMETER TUNINGS HERE
-BATCHSIZE = 32
-EPOCHS = 10
+BATCHSIZE = 8
+EPOCHS = 20
 
 
 if __name__ == '__main__':
@@ -17,7 +17,7 @@ if __name__ == '__main__':
                         choices=['debug', 'info', 'warning', 'error', 'critical'])
     args = parser.parse_args()
     coloredlogs.install(
-        datefmt='%d/%m %H:%M',
+        datefmt='%d/%m %H:%M:%S',
         fmt='%(asctime)s %(levelname)s %(message)s',
         level=args.v.upper(),
     )
@@ -41,37 +41,36 @@ if __name__ == '__main__':
             learning_schedule=[
                 {
                     'loss_terms_to_optimize': {
-                        'kp_mse_filter': ['keypoints', 'upscale_pred', 'point_pred', 'loss_calculation'],
-                        # Repeat the above for the lower lossterm to be calculated!
+                        'kp_loss_mse_vis': ['posenet', 'flatten', 'loss_calculation'],
                     },
-                    'metrics': ['kp_mse_filter', 'kp_mse_scaled'],
+                    'metrics': ['kp_loss_mse', 'kp_accuracy', 'kp_loss_mse_vis', 'kp_accuracy_vis'],
                     'learning_rate': 1e-4,
                 },
             ],
 
-            test_losses_or_metrics=['kp_mse_filter'],
+            test_losses_or_metrics=['kp_loss_mse', 'kp_accuracy', 'kp_loss_mse_vis', 'kp_accuracy_vis'],
 
             # Data sources for training and testing.
             train_data={
                 'real': HDF5Source(
                     session,
                     batch_size,
-                    hdf_path='../datasets/training.h5',
+                    hdf_path='../datasets/dataset.h5',
                     keys_to_use=['train'],
-                    min_after_dequeue=2000,
+                    min_after_dequeue=4000,
                 ),
             },
 
-            # TODO: Fix validation part of framework. It's broken, gives incorrect image dimensions
-            # test_data={
-            #     'real': HDF5Source(
-            #         session,
-            #         batch_size,
-            #         hdf_path='../datasets/dataset.h5',
-            #         keys_to_use=['validate'],
-            #         testing=True,
-            #     ),
-            # },
+            test_data={
+                'real': HDF5Source(
+                    session,
+                    batch_size,
+                    hdf_path='../datasets/dataset.h5',
+                    keys_to_use=['validate'],
+                    testing=True,
+                    validation=True
+                ),
+            },
         )
 
         # Train this model for a set number of epochs

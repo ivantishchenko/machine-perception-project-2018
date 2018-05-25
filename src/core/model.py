@@ -186,32 +186,32 @@ class BaseModel(object):
         """Based on learning schedule, create optimizer instances."""
         self._optimize_ops = []
         all_trainable_variables = tf.trainable_variables()
-        #update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-        #with tf.control_dependencies(update_ops):
-        for spec in self._learning_schedule:
-            optimize_ops = []
-            loss_terms = spec['loss_terms_to_optimize']
-            assert isinstance(loss_terms, dict)
-            for loss_term_key, prefixes in loss_terms.items():
-                assert loss_term_key in self.loss_terms['train'].keys()
-                variables_to_train = []
-                for prefix in prefixes:
-                    variables_to_train += [
-                        v for v in all_trainable_variables
-                        if v.name.startswith(prefix)
-                    ]
-                optimize_op = tf.train.AdamOptimizer(
-                    learning_rate=spec['learning_rate'],
-                    # beta1=0.9,
-                    # beta2=0.999,
-                ).minimize(
-                    loss=self.loss_terms['train'][loss_term_key],
-                    var_list=variables_to_train,
-                    name='optimize_%s' % loss_term_key,
-                )
-                optimize_ops.append(optimize_op)
-            self._optimize_ops.append(optimize_ops)
-            logger.info('Built optimizer for: %s' % ', '.join(loss_terms.keys()))
+        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+        with tf.control_dependencies(update_ops):
+            for spec in self._learning_schedule:
+                optimize_ops = []
+                loss_terms = spec['loss_terms_to_optimize']
+                assert isinstance(loss_terms, dict)
+                for loss_term_key, prefixes in loss_terms.items():
+                    assert loss_term_key in self.loss_terms['train'].keys()
+                    variables_to_train = []
+                    for prefix in prefixes:
+                        variables_to_train += [
+                            v for v in all_trainable_variables
+                            if v.name.startswith(prefix)
+                        ]
+                    optimize_op = tf.train.AdamOptimizer(
+                        learning_rate=spec['learning_rate'],
+                        # beta1=0.9,
+                        # beta2=0.999,
+                    ).minimize(
+                        loss=self.loss_terms['train'][loss_term_key],
+                        var_list=variables_to_train,
+                        name='optimize_%s' % loss_term_key,
+                    )
+                    optimize_ops.append(optimize_op)
+                self._optimize_ops.append(optimize_ops)
+                logger.info('Built optimizer for: %s' % ', '.join(loss_terms.keys()))
 
     def train(self, num_epochs=None, num_steps=None):
         """Train model as requested."""

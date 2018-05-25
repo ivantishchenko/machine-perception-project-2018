@@ -255,7 +255,7 @@ class BasicLayers(object):
             print('==========')
         return layer
 
-    def conv_relu(self, in_tensor, layer_name, kernel_size, out_chan, is_training, stride=1, maxpool=False, disable_dropout=True):
+    def conv_layer(self, in_tensor, layer_name, kernel_size, out_chan, is_training, stride=1, maxpool=False, disable_dropout=True):
         '''
         Method to generate a 2d convolutional layer with various extra components (such as max_pool, leaky_relu, batch_norm and dropout)
         :param tensor: Input tensor on which to apply a 2d convolutional layer
@@ -276,6 +276,14 @@ class BasicLayers(object):
             tensor = self._batch_normalization(tensor=tensor, is_training=is_training)  # https://github.com/ducha-aiki/caffenet-benchmark/blob/master/batchnorm.md
             if not disable_dropout:
                 tensor = self._dropout(tensor=tensor, is_training=is_training)
+            return tensor
+
+    def conv_relu(self, in_tensor, layer_name, kernel_size, out_chan, is_training, stride=1, maxpool=False):
+        with tf.variable_scope(layer_name):
+            tensor = self._conv(tensor=in_tensor, kernel_size=kernel_size, out_chan=out_chan, is_training=is_training, stride=stride)
+            tensor = self._leaky_relu(tensor=tensor)
+            if maxpool:
+                tensor = self._max_pool(tensor=tensor)
             return tensor
 
     def fc_relu(self, in_tensor, layer_name, out_chan, is_training, droprate=0.5, disable_dropout=False):
@@ -456,7 +464,6 @@ class ResNetLayers(BasicLayers):
                 residual = self._bottleneck_inception_residual(in_tensor, out_chan=out_chan, is_training=is_training)
             return tf.add(residual, shortcut)
             # tensor = NetworkOps.leaky_relu(tensor=tensor, name='leaky_relu_2')  # http://torch.ch/blog/2016/02/04/resnets.html
-
 
 class ImageOps(object):
     @classmethod

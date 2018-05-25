@@ -17,19 +17,19 @@ class TrivialNet(BaseModel):
 
         with tf.variable_scope('keypoints'):
             image = rgb_image
-            image = layers.conv_relu(image, "layer1", kernel_size=3, out_chan=64, is_training=self.is_training, disable_dropout=False)
-            image = layers.conv_relu(image, "layer2", kernel_size=3, out_chan=128, is_training=self.is_training, disable_dropout=False)
-            image = layers.conv_relu(image, "layer3", kernel_size=3, out_chan=128, is_training=self.is_training, disable_dropout=False)
-            image = layers.conv_relu(image, "layer4", kernel_size=3, out_chan=128, is_training=self.is_training, maxpool=True, disable_dropout=False)
-            image = layers.conv_relu(image, "layer5", kernel_size=3, out_chan=128, is_training=self.is_training, disable_dropout=False)
-            image = layers.conv_relu(image, "layer6", kernel_size=3, out_chan=128, is_training=self.is_training, disable_dropout=False)
-            image = layers.conv_relu(image, "layer7", kernel_size=3, out_chan=256, is_training=self.is_training, maxpool=True, disable_dropout=False)
-            image = layers.conv_relu(image, "layer8", kernel_size=3, out_chan=256, is_training=self.is_training, disable_dropout=False)
-            image = layers.conv_relu(image, "layer9", kernel_size=3, out_chan=256, is_training=self.is_training, maxpool=True, disable_dropout=False)
-            image = layers.conv_relu(image, "layer10", kernel_size=3, out_chan=512, is_training=self.is_training, disable_dropout=False)
-            image = layers.conv_relu(image, "layer11", kernel_size=1, out_chan=2048, is_training=self.is_training, disable_dropout=False)
-            image = layers.conv_relu(image, "layer12", kernel_size=1, out_chan=256, is_training=self.is_training, maxpool=True, disable_dropout=False)
-            image = layers.conv_relu(image, "layer13", kernel_size=3, out_chan=256, is_training=self.is_training, maxpool=True, disable_dropout=False)
+            image = layers.conv_layer(image, "layer1", kernel_size=3, out_chan=64, is_training=self.is_training, disable_dropout=False)
+            image = layers.conv_layer(image, "layer2", kernel_size=3, out_chan=128, is_training=self.is_training, disable_dropout=False)
+            image = layers.conv_layer(image, "layer3", kernel_size=3, out_chan=128, is_training=self.is_training, disable_dropout=False)
+            image = layers.conv_layer(image, "layer4", kernel_size=3, out_chan=128, is_training=self.is_training, maxpool=True, disable_dropout=False)
+            image = layers.conv_layer(image, "layer5", kernel_size=3, out_chan=128, is_training=self.is_training, disable_dropout=False)
+            image = layers.conv_layer(image, "layer6", kernel_size=3, out_chan=128, is_training=self.is_training, disable_dropout=False)
+            image = layers.conv_layer(image, "layer7", kernel_size=3, out_chan=256, is_training=self.is_training, maxpool=True, disable_dropout=False)
+            image = layers.conv_layer(image, "layer8", kernel_size=3, out_chan=256, is_training=self.is_training, disable_dropout=False)
+            image = layers.conv_layer(image, "layer9", kernel_size=3, out_chan=256, is_training=self.is_training, maxpool=True, disable_dropout=False)
+            image = layers.conv_layer(image, "layer10", kernel_size=3, out_chan=512, is_training=self.is_training, disable_dropout=False)
+            image = layers.conv_layer(image, "layer11", kernel_size=1, out_chan=2048, is_training=self.is_training, disable_dropout=False)
+            image = layers.conv_layer(image, "layer12", kernel_size=1, out_chan=256, is_training=self.is_training, maxpool=True, disable_dropout=False)
+            image = layers.conv_layer(image, "layer13", kernel_size=3, out_chan=256, is_training=self.is_training, maxpool=True, disable_dropout=False)
 
         with tf.variable_scope('flatten'):
             result = tf.contrib.layers.flatten(image)
