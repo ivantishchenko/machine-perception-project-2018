@@ -164,7 +164,7 @@ class BasicLayers(object):
             with tf.variable_scope(name, reuse=True):
                 gamma = tf.get_variable('gamma')
                 beta = tf.get_variable('beta')
-                self.summary.histogram(name + '/gamma', gamma)
+                # self.summary.histogram(name + '/gamma', gamma)
                 self.summary.histogram(name + '/beta', beta)
                 # The following variables are not of interest really, they stay constant from the looks
                 # moving_mean = tf.get_variable('moving_mean')

@@ -8,6 +8,8 @@ import numpy as np
 import tensorflow as tf
 from numpy.random import RandomState
 
+import datasources.augmentation as aug
+
 from core import BaseDataSource
 from util.img_transformations import crop_hand, resize
 # from util.img_transformations import crop_hand, resize, rotate, flipLR
@@ -114,31 +116,35 @@ class HDF5Source(BaseDataSource):
         """Resize image and normalize intensities."""
         res_size = (128, 128)
         img = entry['img'].transpose(1, 2, 0)
-        img = img / 255.0
 
         if self.validation or not self.testing:
             kp_2D = entry['kp_2D']
             img, kp_2D = crop_hand(img, kp_2D)
             img, kp_2D = resize(img, kp_2D, res_size)
-            # op_array = np.random.randint(2, size=8)
-            # if op_array[0] == 1:
-            #     # Modify brightness
-            # if op_array[1] == 1:
-            #     # Modify contrast
-            # if op_array[2] == 1:
-            #     # Modify hue
-            # if op_array[3] == 1:
-            #     # Drop out pixels at random in image
-            # if op_array[4] == 1:
-            #     # Do image flip
-            # if op_array[5] == 1:
-            #     # Do 90° rotation, will be generalized later to any angle
-            # if op_array[6] == 1:
-            #     # Shift the image
-            # if op_array[7] == 1:
-            #     # Shear the image by some amount
+            if not self.validation:
+                augmentation_flag = np.random.binomial(1, 0.7)
+                if augmentation_flag == 0:
+                    op_array = np.random.randint(2, size=aug.NUM_TRANSFORMATIONS)
+                    if op_array[4] == 1:
+                        img, kp_2D = aug.change_contrast(img, kp_2D)
+                    if op_array[5] == 1:
+                        img, kp_2D = aug.change_brightness(img, kp_2D)
+                    if op_array[6] == 1:
+                        img, kp_2D = aug.dropout(img, kp_2D)
+                    if op_array[7] == 1:
+                        img, kp_2D = aug.salt_pepper(img, kp_2D)
+                    if op_array[0] == 1:
+                        img, kp_2D = aug.flip_horizontal(img, kp_2D)
+                    if op_array[1] == 1:
+                        img, kp_2D = aug.flip_vertical(img, kp_2D)
+                    if op_array[2] == 1:
+                        img, kp_2D = aug.rotate(img, kp_2D)
+                    if op_array[3] == 1:
+                        img, kp_2D = aug.shear(img, kp_2D)
+                    entry['vis_2D'] = aug.check_vis(kp_2D, entry['vis_2D'])
             entry['kp_2D'] = kp_2D
 
+        img = img / 255.0
         entry['img'] = img.transpose(2, 0, 1)
 
         # Ensure all values in an entry are 4-byte floating point numbers

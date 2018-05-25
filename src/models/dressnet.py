@@ -28,17 +28,17 @@ class ResNet(BaseModel):
         is_visible = input_tensors['vis_2D']
         resnet = rnl(self.summary, True)
 
-        with tf.variable_scope('resnet68'):
+        with tf.variable_scope('resnet34'):
             image = resnet.init_block(rgb_image, self.is_training)
             for i, layers in enumerate(resnet_repetitions_normal):
                 for j in range(layers):
-                    image = resnet.bottleneck(image, layer_name='conv%d_%d' % (i + 2, j + 1),
+                    image = resnet.vanilla(image, layer_name='conv%d_%d' % (i + 2, j + 1),
                                               first_layer=(j == 0), out_chan=resnet_channels[i],
                                               is_training=self.is_training)
             # image = resnet._max_pool(image, pool=4)
             image = resnet.last_layer(image, is_training=self.is_training, use_4k=False)
             self.summary.histogram('last_layer', image)
-            self.summary.feature_maps('last_layer', image)
+            # self.summary.feature_maps('last_layer', image)
 
         with tf.variable_scope('flatten'):
             image = resnet.output_layer(image, is_training=self.is_training, use_4k=False)
