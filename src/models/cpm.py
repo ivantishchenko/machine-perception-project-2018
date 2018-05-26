@@ -27,17 +27,18 @@ class Glover(BaseModel):
         def generate_heatmaps(kp, length, dev = 1.0):
             heatmap, _ = tf.map_fn(lambda i: iop.get_single_heatmap(i, length, dev, CROP_SIZE // length, True),
                                    tf.nn.embedding_lookup(kp, np.array(range(kp.shape[0]))),
-                                   dtype=([tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
-                                           tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
-                                           tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
-                                          ], tf.float32),
+                                   dtype=(
+                                   [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
+                                    tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
+                                    tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32],
+                                   tf.float32),
                                    back_prop=False)
             return tf.transpose(tf.stack(heatmap), perm=[1, 0, 2, 3])
 
         # hm_gt = generate_heatmaps(keypoints, HEATMAP_SIZE)
         # hm_gt_fs = generate_heatmaps(keypoints, CROP_SIZE)
 
-        layers = bl(self.summary)
+        layers = bl(self.summary, True)
 
         with tf.variable_scope('posenet'):
             layers_per_block = [2, 2, 4, 2]
@@ -49,17 +50,20 @@ class Glover(BaseModel):
             for block_id, (layer_num, chan_num, pool) in enumerate(zip(layers_per_block, out_chan_list, pool_list), 1):
                 for layer_id in range(layer_num):
                     image = layers.conv_relu(image, 'conv%d_%d' % (block_id, layer_id + 1), kernel_size=3,
-                                              out_chan=chan_num, is_training=self.is_training,
-                                              maxpool=(True if layer_id == range(layer_num)[-1] and pool else False))
+                                             out_chan=chan_num, is_training=self.is_training,
+                                             max_pool=(True if layer_id == range(layer_num)[-1] and pool else False))
 
             image = layers.conv_relu(image, 'conv4_3_CPM', kernel_size=3, out_chan=256, is_training=self.is_training)
             image = layers.conv_relu(image, 'conv4_4_CPM', kernel_size=3, out_chan=256, is_training=self.is_training)
             image = layers.conv_relu(image, 'conv4_5_CPM', kernel_size=3, out_chan=256, is_training=self.is_training)
             image = layers.conv_relu(image, 'conv4_6_CPM', kernel_size=3, out_chan=256, is_training=self.is_training)
-            downsampled_map = layers.conv_relu(image, 'conv4_7_CPM', kernel_size=3, out_chan=128, is_training=self.is_training)
+            downsampled_map = layers.conv_relu(image, 'conv4_7_CPM', kernel_size=3, out_chan=128,
+                                               is_training=self.is_training)
 
-            image = layers.conv_relu(downsampled_map, 'conv5_1_CPM', kernel_size=1, out_chan=512, is_training=self.is_training)
-            scoremap = layers._conv(image, kernel_size=1, out_chan=KEYPOINT_COUNT, is_training=self.is_training, name='conv5_P')
+            image = layers.conv_relu(downsampled_map, 'conv5_1_CPM', kernel_size=1, out_chan=512,
+                                     is_training=self.is_training)
+            scoremap = layers._conv(image, kernel_size=1, out_chan=KEYPOINT_COUNT, is_training=self.is_training,
+                                    name='conv5_P')
             scoremap_list.append(scoremap)
 
             # iterate recurrent part a couple of times
@@ -69,15 +73,16 @@ class Glover(BaseModel):
             for pass_id in range(num_recurrent_units):
                 image = tf.concat([scoremap_list[-1], downsampled_map], 1)
                 for rec_id in range(layers_per_recurrent_unit):
-                    image = layers.conv_relu(image, 'conv%d_%d_CPM' % (pass_id + offset, rec_id + 1), kernel_size=5, out_chan=128, is_training=self.is_training)
-                image = layers.conv_relu(image, 'conv%d_%d_CPM' % (pass_id + offset, layers_per_recurrent_unit + 1), kernel_size=1, out_chan=128, is_training=self.is_training)
-                scoremap = layers._conv(image, kernel_size=1, out_chan=KEYPOINT_COUNT, is_training=self.is_training, name='conv%d_P' % (pass_id + offset))
+                    image = layers.conv_relu(image, 'conv%d_%d_CPM' % (pass_id + offset, rec_id + 1), kernel_size=5,
+                                             out_chan=128, is_training=self.is_training)
+                image = layers.conv_relu(image, 'conv%d_%d_CPM' % (pass_id + offset, layers_per_recurrent_unit + 1),
+                                         kernel_size=1, out_chan=128, is_training=self.is_training)
+                scoremap = layers._conv(image, kernel_size=1, out_chan=KEYPOINT_COUNT, is_training=self.is_training,
+                                        name='conv%d_P' % (pass_id + offset))
                 scoremap_list.append(scoremap)
 
         with tf.variable_scope('flatten'):
-            result = tf.contrib.layers.flatten(scoremap_list[-1])
-            result = layers.fc_relu(result, "FC_LRU1", out_chan=2*KEYPOINT_COUNT, is_training=self.is_training, disable_dropout=True)
-            result = tf.reshape(result, (-1, KEYPOINT_COUNT, 2))
+            result = layers.pred_layer(scoremap_list[-1], is_training=self.is_training)
 
         with tf.variable_scope('loss_calculation'):
             # Include all keypoints for metrics. These are rougher scores.
@@ -89,7 +94,8 @@ class Glover(BaseModel):
             count_vis = tf.count_nonzero(tf.multiply(keypoints, is_visible))
             loss_mse_vis = tf.multiply(tf.squared_difference(keypoints, result), is_visible)
             loss_mse_vis = tf.reduce_sum(tf.truediv(loss_mse_vis, tf.cast(count_vis, dtype=tf.float32)))
-            corr_vis = tf.count_nonzero(tf.less_equal(tf.multiply(tf.squared_difference(keypoints, result), is_visible), ACCURACY_DISTANCE))
+            corr_vis = tf.count_nonzero(tf.less_equal(tf.multiply(tf.squared_difference(keypoints, result), is_visible),
+                                                      ACCURACY_DISTANCE))
             precision_visible = tf.divide(corr_vis, count_vis)
 
         # with tf.variable_scope('upscale_pred'):

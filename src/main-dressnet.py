@@ -16,7 +16,7 @@ if __name__ == '__main__':
                         choices=['debug', 'info', 'warning', 'error', 'critical'])
     args = parser.parse_args()
     coloredlogs.install(
-        datefmt='%d/%m %H:%M',
+        datefmt='%d/%m %H:%M:%S',
         fmt='%(asctime)s %(levelname)s %(message)s',
         level=args.v.upper(),
     )
