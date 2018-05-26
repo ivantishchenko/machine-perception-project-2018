@@ -1,6 +1,7 @@
 """Development architecture."""
 from typing import Dict
 import tensorflow as tf
+import numpy as np
 from core import BaseDataSource, BaseModel
 from util.common_ops import ResNetLayers as rnl
 
@@ -15,6 +16,10 @@ resnet_repetitions_small = [2, 2, 2, 2]
 resnet_repetitions_normal = [3, 4, 6, 3]
 resnet_repetitions_large = [3, 4, 23, 3]
 resnet_repetitions_extra = [3, 8, 36, 3]
+resnet_blockcount_small = np.sum(resnet_repetitions_small) - 4
+resnet_blockcount_normal = np.sum(resnet_repetitions_normal) - 4
+resnet_blockcount_large = np.sum(resnet_repetitions_large) - 4
+resnet_blockcount_extra = np.sum(resnet_repetitions_extra) - 4
 
 
 class ResNet(BaseModel):
@@ -30,13 +35,24 @@ class ResNet(BaseModel):
 
         with tf.variable_scope('resnet34'):
             image = resnet.init_block(rgb_image, self.is_training)
+            depth_count = 0
             for i, layers in enumerate(resnet_repetitions_normal):
                 for j in range(layers):
-                    image = resnet.vanilla(image, layer_name='conv%d_%d' % (i + 2, j + 1),
-                                           first_layer=(j == 0), out_chan=resnet_channels[i],
-                                           is_training=self.is_training)
+                    if j != 0:
+                        depth_count = depth_count + 1
+                    if layers == resnet_repetitions_normal[-1]:
+                        image = resnet.vanilla_dilation(image, layer_name='conv%d_%d' % (i + 2, j + 1),
+                                                        first_layer=(j == 0), out_chan=resnet_channels[i],
+                                                        is_training=self.is_training,
+                                                        depth=(depth_count, resnet_blockcount_normal))
+                    else:
+                        image = resnet.vanilla(image, layer_name='conv%d_%d' % (i + 2, j + 1),
+                                               first_layer=(j == 0), out_chan=resnet_channels[i],
+                                               is_training=self.is_training,
+                                               depth=(depth_count, resnet_blockcount_normal))
+
             # image = resnet._max_pool(image, pool=4)
-            image = resnet.last_layer(image, is_training=self.is_training, use_4k=False)
+            image = resnet.last_layer(image, is_training=self.is_training, use_4k=False, use_upconv=True)
             self.summary.histogram('last_layer', image)
 
         with tf.variable_scope('flatten'):

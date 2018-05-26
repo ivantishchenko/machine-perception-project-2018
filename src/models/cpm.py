@@ -14,7 +14,15 @@ ACCURACY_DISTANCE = 2
 
 
 class Glover(BaseModel):
-    """ Network performing 3D pose estimation of a human hand from a single color image. """
+    """
+    Network performing 3D pose estimation of a human hand from a single color image.
+    Inspired by:
+    https://github.com/shihenw/convolutional-pose-machines-release/tree/master/model/_trained_MPI
+        no downscaling layer from this one
+
+    Additional interesting resources:
+    https://github.com/ildoonet/tf-pose-estimation/blob/master/src/network_cmu.py
+    """
     def build_model(self, data_sources: Dict[str, BaseDataSource], mode: str):
         """Build model."""
         data_source = next(iter(data_sources.values()))

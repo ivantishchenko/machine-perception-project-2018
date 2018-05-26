@@ -31,15 +31,11 @@ class LiveTester(object):
 
     def trigger_test_if_not_testing(self, current_step):
         """If not currently testing, run test."""
-        logger.debug("Requested testing.")
         if not self._is_testing:
             with self._condition:
-                logger.debug("Copying weights now...")
                 self.copy_model_weights()
                 self._is_testing = True
-                logger.debug("Testing at current step...")
                 self._testing_at_step = current_step
-                logger.debug("Testing done, notifying all...")
                 self._condition.notify_all()
 
     def test_job(self):
@@ -65,7 +61,6 @@ class LiveTester(object):
 
                 self.time.start('full test')
                 for i in range(num_batches):
-                    logger.debug('Tested on %03d/%03d batches.' % (i + 1, num_batches))
                     output = self._tensorflow_session.run(
                         fetches=fetches,
                         feed_dict={
@@ -146,4 +141,3 @@ class LiveTester(object):
         """
         assert self._copy_variables_to_test_model_op is not None
         self._tensorflow_session.run(self._copy_variables_to_test_model_op)
-        logger.debug('Copied over trainable model parameters for testing.')
