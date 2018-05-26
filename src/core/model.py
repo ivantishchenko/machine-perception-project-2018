@@ -66,8 +66,8 @@ class BaseModel(object):
         self._tester = LiveTester(self, self._test_data)
 
         # Run-time parameters
-        self.is_training = tf.placeholder(tf.bool)
-        self.use_batch_statistics = tf.placeholder(tf.bool)
+        self.is_training = tf.placeholder(tf.bool, name='is_training')
+        self.use_batch_statistics = tf.placeholder(tf.bool, name='use_batch_statistics')
 
         self._build_all_models()
 
@@ -173,39 +173,46 @@ class BaseModel(object):
         """Based on learning schedule, create optimizer instances."""
         self._optimize_ops = []
         all_trainable_variables = tf.trainable_variables()
-        for spec in self._learning_schedule:
-            optimize_ops = []
-            loss_terms = spec['loss_terms_to_optimize']
-            assert isinstance(loss_terms, dict)
-            for loss_term_key, prefixes in loss_terms.items():
-                assert loss_term_key in self.loss_terms['train'].keys()
-                variables_to_train = []
-                for prefix in prefixes:
-                    variables_to_train += [
-                        v for v in all_trainable_variables
-                        if v.name.startswith(prefix)
-                    ]
-                optimize_op = tf.train.AdamOptimizer(
-                    learning_rate=spec['learning_rate'],
-                    # beta1=0.9,
-                    # beta2=0.999,
-                ).minimize(
-                    loss=self.loss_terms['train'][loss_term_key],
-                    var_list=variables_to_train,
-                    name='optimize_%s' % loss_term_key,
-                )
-                optimize_ops.append(optimize_op)
-            self._optimize_ops.append(optimize_ops)
-            logger.info('Built optimizer for: %s' % ', '.join(loss_terms.keys()))
+        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+        with tf.control_dependencies(update_ops):
+            for spec in self._learning_schedule:
+                optimize_ops = []
+                loss_terms = spec['loss_terms_to_optimize']
+                assert isinstance(loss_terms, dict)
+                for loss_term_key, prefixes in loss_terms.items():
+                    assert loss_term_key in self.loss_terms['train'].keys()
+                    variables_to_train = []
+                    for prefix in prefixes:
+                        variables_to_train += [
+                            v for v in all_trainable_variables
+                            if v.name.startswith(prefix)
+                        ]
+                    optimize_op = tf.train.AdamOptimizer(
+                        learning_rate=spec['learning_rate'],
+                        # beta1=0.9,
+                        # beta2=0.999,
+                    ).minimize(
+                        loss=self.loss_terms['train'][loss_term_key],
+                        var_list=variables_to_train,
+                        name='optimize_%s' % loss_term_key,
+                    )
+                    optimize_ops.append(optimize_op)
+                self._optimize_ops.append(optimize_ops)
+                logger.info('Built optimizer for: %s' % ', '.join(loss_terms.keys()))
 
     def train(self, num_epochs=None, num_steps=None):
         """Train model as requested."""
         if num_steps is None:
             num_entries = np.min([s.num_entries for s in list(self._train_data.values())])
             num_steps = int(num_epochs * num_entries / self._batch_size)
+        logger.info('Training for %d steps' % num_steps)
         self.initialize_if_not(training=True)
 
         initial_step = self.checkpoint.load_all()
+        if initial_step >= num_steps:
+            # Let's return immediately, we will not even try another iteration to keep the checkpoints clean
+            return
+
         current_step = initial_step
         for current_step in range(initial_step, num_steps):
             fetches = {}
@@ -232,10 +239,10 @@ class BaseModel(object):
             self.time.end('train_iteration')
 
             # Print progress
-            to_print = '%07d> ' % current_step
+            to_print = 'Train: %07d/%07d> ' % (current_step, num_steps)
             to_print += ', '.join(['%s = %f' % (k, v)
                                    for k, v in zip(loss_term_keys, outcome['loss_terms'])])
-            self.time.log_every('train_iteration', to_print, seconds=2)
+            self.time.log_every('train_iteration', to_print, seconds=5)
 
             # Trigger copy weights & concurrent testing (if not already running)
             if self._enable_live_testing:

@@ -82,7 +82,7 @@ class LiveTester(object):
                     outputs[name] = np.mean(values)
 
                 # TODO: Log metric as summary
-                to_print = '[Test at step %06d] ' % self._testing_at_step
+                to_print = 'Test: %07d> ' % self._testing_at_step
                 to_print += ', '.join([
                     '%s = %f' % (name, value) for name, value in outputs.items()
                 ])
