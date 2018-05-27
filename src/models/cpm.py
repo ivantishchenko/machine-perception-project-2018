@@ -55,6 +55,8 @@ class Glover(BaseModel):
             scoremap_list = []
 
             image = rgb_image
+            pooled_image = tf.layers.average_pooling2d(image, pool_size=9, strides=8, data_format='channels_first',
+                                                       padding='same', name='average_pool')
             for block_id, (layer_num, chan_num, pool) in enumerate(zip(layers_per_block, out_chan_list, pool_list), 1):
                 for layer_id in range(layer_num):
                     image = layers.conv_relu(image, 'conv%d_%d' % (block_id, layer_id + 1), kernel_size=3,
@@ -79,7 +81,7 @@ class Glover(BaseModel):
             num_recurrent_units = 5
             offset = 6
             for pass_id in range(num_recurrent_units):
-                image = tf.concat([scoremap_list[-1], downsampled_map], 1)
+                image = tf.concat([scoremap_list[-1], downsampled_map, pooled_image], 1)
                 for rec_id in range(layers_per_recurrent_unit):
                     image = layers.conv_relu(image, 'conv%d_%d_CPM' % (pass_id + offset, rec_id + 1), kernel_size=5,
                                              out_chan=128, is_training=self.is_training)
