@@ -141,12 +141,12 @@ class HDF5Source(BaseDataSource):
                 augmentation_flag = np.random.binomial(1, 0.7)
                 if augmentation_flag == 0:
                     img, kp_2D = aug.perform_augmentation_all(kp_var, img, kp_2D)
-                    # Update keypoint visibility (this should be equal to noop for the current design, no points go out
-                    # of the image
-                    entry['vis_2D'] = aug.get_vis(kp_2D, entry['vis_2D'])
 
                 img, kp_2D = crop_hand(img, kp_2D)
                 img, kp_2D = resize(img, kp_2D, res_size)
+                # Update keypoint visibility (this should be equal to noop for the current design, no points go out
+                # of the image
+                entry['vis_2D'] = aug.get_vis(kp_2D, entry['vis_2D'])
 
                 if augmentation_flag == 0:
                     img, kp_2D = aug.perform_augmentation_all(kp_invar, img, kp_2D)
