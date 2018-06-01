@@ -399,7 +399,7 @@ class ResNetLayers(BasicLayers):
     @staticmethod
     def _get_survival_rate(depth, survival_last_block=0.5):
         """
-        Helper function to calculate the survival rate of a block according to stochastic depth.
+        Helper function to calculate the survival rate of a block for stochastic depth.
         https://arxiv.org/abs/1603.09382
         :param depth: Tuple of (current_depth, total_depth)
         :param survival_last_block: Survival rate of the last block
@@ -629,7 +629,7 @@ class ResNetLayers(BasicLayers):
 
                 def training():
                     dims = in_tensor.shape
-                    return tf.cond(tf.less(survival_rate, threshold), lambda: branch(),
+                    return tf.cond(tf.greater_equal(survival_rate, threshold), lambda: branch(),
                                    lambda: tf.zeros([dims[0], out_chan, dims[2], dims[2]]))
 
                 def inference():
@@ -669,7 +669,7 @@ class ResNetLayers(BasicLayers):
 
                 def training():
                     dims = in_tensor.shape
-                    return tf.cond(tf.less(survival_rate, threshold), lambda: branch(),
+                    return tf.cond(tf.greater_equal(survival_rate, threshold), lambda: branch(),
                                    lambda: tf.zeros([dims[0], out_chan, dims[2], dims[2]]))
 
                 def inference():
@@ -709,7 +709,7 @@ class ResNetLayers(BasicLayers):
 
                 def training():
                     dims = in_tensor.shape
-                    return tf.cond(tf.less(survival_rate, threshold), lambda: branch(),
+                    return tf.cond(tf.greater_equal(survival_rate, threshold), lambda: branch(),
                                    lambda: tf.zeros([dims[0], out_chan, dims[2], dims[2]]))
 
                 def inference():
@@ -750,7 +750,7 @@ class ResNetLayers(BasicLayers):
 
                 def training():
                     dims = in_tensor.shape
-                    return tf.cond(tf.less(survival_rate, threshold), lambda: branch(),
+                    return tf.cond(tf.greater_equal(survival_rate, threshold), lambda: branch(),
                                    lambda: tf.zeros([dims[0], out_chan, dims[2], dims[2]]))
 
                 def inference():
@@ -785,7 +785,7 @@ class ResNetLayers(BasicLayers):
 
                 def training():
                     dims = in_tensor.shape
-                    return tf.cond(tf.less(survival_rate, threshold), lambda: branch(),
+                    return tf.cond(tf.greater_equal(survival_rate, threshold), lambda: branch(),
                                    lambda: tf.zeros([dims[0], out_chan, dims[2], dims[2]]))
 
                 def inference():
@@ -820,7 +820,7 @@ class ResNetLayers(BasicLayers):
 
                 def training():
                     dims = in_tensor.shape
-                    return tf.cond(tf.less(survival_rate, threshold), lambda: branch(),
+                    return tf.cond(tf.greater_equal(survival_rate, threshold), lambda: branch(),
                                    lambda: tf.zeros([dims[0], out_chan, dims[2], dims[2]]))
 
                 def inference():
@@ -856,7 +856,7 @@ class ResNetLayers(BasicLayers):
 
                 def training():
                     dims = in_tensor.shape
-                    return tf.cond(tf.less(survival_rate, threshold), lambda: branch(),
+                    return tf.cond(tf.greater_equal(survival_rate, threshold), lambda: branch(),
                                    lambda: tf.zeros([dims[0], out_chan, dims[2], dims[2]]))
 
                 def inference():
@@ -894,7 +894,7 @@ class ResNetLayers(BasicLayers):
 
                 def training():
                     dims = in_tensor.shape
-                    return tf.cond(tf.less(survival_rate, threshold), lambda: branch(),
+                    return tf.cond(tf.greater_equal(survival_rate, threshold), lambda: branch(),
                                    lambda: tf.zeros([dims[0], out_chan, dims[2], dims[2]]))
 
                 def inference():
