@@ -7,7 +7,7 @@ import numpy as np
 
 NUM_JOINTS = 21
 NUM_TRANSFORMATIONS = 8
-colours={0: 'black', 1: 'blue', 2: 'orange', 3: 'green', 4: 'red', 5: 'yellow'}
+colours = {0: 'black', 1: 'blue', 2: 'orange', 3: 'green', 4: 'red', 5: 'yellow'}
 
 
 """TRANSFORMATIONS"""
@@ -31,7 +31,7 @@ def dropout(img, kp_2D, val=0.01):
     return image_aug, kp_2D
 
 
-def change_brightness(img, kp_2D, factor=(0.6, 1.4)):
+def change_brightness(img, kp_2D, factor=(0.75, 1.25)):
     """Change brightness"""
     seq = iaa.Sequential([
         iaa.Multiply(factor)
@@ -40,7 +40,7 @@ def change_brightness(img, kp_2D, factor=(0.6, 1.4)):
     return image_aug, kp_2D
 
 
-def change_contrast(img, kp_2D, factor=(0.6, 1.4)):
+def change_contrast(img, kp_2D, factor=(0.75, 1.25)):
     """Change contrast"""
     seq = iaa.Sequential([
         iaa.ContrastNormalization(factor)
@@ -49,53 +49,57 @@ def change_contrast(img, kp_2D, factor=(0.6, 1.4)):
     return image_aug, kp_2D
 
 
-def shear(img, kp_2D, angle=30):
+def shear(img, kp_2D, angle=None, scale=1):
     """Shearing"""
-    seq = iaa.Sequential([
-        iaa.Affine(
-            shear=angle
-        )
-    ])
-    image_aug, keypoints_aug = perform_augmentation_all(seq, img, kp_2D)
+    if angle is None:
+        transform = iaa.Affine(shear=(-15, 15), scale=0.78)
+    else:
+        transform = iaa.Affine(shear=angle, scale=scale)
+    seq = iaa.Sequential([transform])
+
+    seq_det = seq.to_deterministic()
+    image_aug, keypoints_aug = perform_augmentation_all(seq_det, img, kp_2D)
     return image_aug, keypoints_aug
 
 
-"""Rotation by angle"""
 # WARNING CHECK VISIBILITY WHEN ROTATING BY NOT 90
-def rotate(img, kp_2D, angle=90):
-    if abs(angle) == 90 or abs(angle) == 180:
-        transofrm = iaa.Affine(rotate=angle)
-    else: 
-        transofrm = iaa.Affine(rotate=angle, scale=0.7)
+def rotate(img, kp_2D, angle=None, scale=1):
+    """Rotation by angle"""
+    if angle is None:
+        transform = iaa.Affine(rotate=(-90, 90), scale=0.7)
+    else:
+        transform = iaa.Affine(rotate=angle, scale=scale)
         
-    seq = iaa.Sequential([transofrm])
-    image_aug, keypoints_aug = perform_augmentation_all(seq, img, kp_2D)
+    seq = iaa.Sequential([transform])
+    seq_det = seq.to_deterministic()
+    image_aug, keypoints_aug = perform_augmentation_all(seq_det, img, kp_2D)
     return image_aug, keypoints_aug
+
 
 def flip_vertical(img, kp_2D):
     """Do a vertical flip img + kp"""
     seq = iaa.Sequential([
-        iaa.Flipud(1.0) # Vertical vertical
+        iaa.Flipud(1.0)  # Vertical vertical
     ])
     image_aug, keypoints_aug = perform_augmentation_all(seq, img, kp_2D)
     return image_aug, keypoints_aug
+
 
 def flip_horizontal(img, kp_2D):
     """Do a horizontal flip img + kp"""
     # define an augmentation sequence
     seq = iaa.Sequential([
-        iaa.Fliplr(1.0) # Horizontal flip
+        iaa.Fliplr(1.0)  # Horizontal flip
     ])
     image_aug, keypoints_aug = perform_augmentation_all(seq, img, kp_2D)
     return image_aug, keypoints_aug
 
-def check_vis(keypoints_aug, original_visibility):
+
+def get_vis(keypoints_aug, original_visibility):
     """Check visibility of the keypoints"""
     vis1 = np.any(keypoints_aug > 128, axis=1)
     vis2 = np.any(keypoints_aug < 0, axis=1)
-
-    # do nor
-    vis = ~(vis1+vis2)
+    vis = ~(vis1 + vis2)
     vis = vis.astype(int).reshape(21, 1)
     vis = np.bitwise_and(original_visibility, vis)
 

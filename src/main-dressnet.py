@@ -55,22 +55,22 @@ if __name__ == '__main__':
                 'real': HDF5Source(
                     session,
                     batch_size,
-                    hdf_path='../datasets/training.h5',
+                    hdf_path='../datasets/dataset.h5',
                     keys_to_use=['train'],
                     min_after_dequeue=4000,
                 ),
             },
 
-            # test_data={
-            #     'real': HDF5Source(
-            #         session,
-            #         batch_size,
-            #         hdf_path='../datasets/dataset.h5',
-            #         keys_to_use=['validate'],
-            #         testing=True,
-            #         validation=True
-            #     ),
-            # },
+            test_data={
+                'real': HDF5Source(
+                    session,
+                    batch_size,
+                    hdf_path='../datasets/dataset.h5',
+                    keys_to_use=['validate'],
+                    testing=True,
+                    validation=True
+                ),
+            },
         )
 
         # Train this model for a set number of epochs

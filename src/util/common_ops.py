@@ -45,7 +45,7 @@ class BasicLayers(object):
         :param name: Name of this layer
         :return: Application of convolution on the layer
         """
-        def __conv(bool_training = True):
+        def __conv(bool_training=True):
             return tf.layers.conv2d(
                 inputs=tensor,
                 filters=out_chan,
@@ -68,9 +68,6 @@ class BasicLayers(object):
                 reuse=tf.AUTO_REUSE
             )
 
-        # layer_training = __conv(True)
-        # layer_inference = __conv(False)
-        # layer = tf.cond(is_training, lambda: layer_training, lambda: layer_inference)
         layer = __conv()
         if self.visualize:
             # self.summary.filters(name, layer)
@@ -95,7 +92,7 @@ class BasicLayers(object):
         :param name: Name of this layer
         :return: Application of transpose-convolution on the layer
         """
-        def __upconv(bool_training = True):
+        def __upconv(bool_training=True):
             return tf.layers.conv2d_transpose(
                 inputs=tensor,
                 filters=out_chan,
@@ -117,9 +114,6 @@ class BasicLayers(object):
                 reuse=tf.AUTO_REUSE
             )
 
-        # layer_training = __upconv(True)
-        # layer_inference = __upconv(False)
-        # layer = tf.cond(is_training, lambda: layer_training, lambda: layer_inference)
         layer = __upconv(True)
         if self.visualize:
             # self.summary.filters(name, layer)
@@ -181,7 +175,7 @@ class BasicLayers(object):
                 gamma_regularizer=None,
                 beta_constraint=None,
                 gamma_constraint=None,
-                training=is_training,
+                training=True,
                 name=name,
                 reuse=None,
                 renorm=False,
@@ -203,7 +197,7 @@ class BasicLayers(object):
                 param_initializers=None,
                 param_regularizers=None,
                 updates_collections=None,  # tf.GraphKeys.UPDATE_OPS,
-                is_training=is_training,
+                is_training=True,  # is_training would be more correct but validation performance is strange with it
                 reuse=None,
                 variables_collections=None,
                 outputs_collections=None,
@@ -295,9 +289,6 @@ class BasicLayers(object):
             )
 
         if activation_fun is tf.nn.leaky_relu:
-            # layer_training = __fc()
-            # layer_inference = __fc(False)
-            # layer = tf.cond(is_training, lambda: layer_training, lambda: layer_inference)
             layer = __fc(act_fun=None)
             if self.visualize:
                 # self.summary.feature_maps(name, layer)
@@ -309,9 +300,6 @@ class BasicLayers(object):
                     self.summary.histogram(name + '/biases', biases)
             layer = self._leaky_relu(layer)
         else:
-            # layer_training = __fc(True, activation_fun)
-            # layer_inference = __fc(False, activation_fun)
-            # layer = tf.cond(is_training, lambda: layer_training, lambda: layer_inference)
             layer = __fc(act_fun=activation_fun)
             print(name)
             print('\n'.join(str(e) for e in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)))
@@ -387,8 +375,9 @@ class BasicLayers(object):
     def pred_layer(self, in_tensor, is_training):
         with tf.variable_scope('pred'):
             result = tf.contrib.layers.flatten(in_tensor)
-            return self.fc_relu(result, 'fc_relu', out_chan=BasicLayers.KEYPOINTS * 2, is_training=is_training,
-                                disable_dropout=True)
+            result = self.fc_relu(result, 'fc_relu', out_chan=BasicLayers.KEYPOINTS * 2, is_training=is_training,
+                                  disable_dropout=True)
+            return tf.reshape(result, (-1, 21, 2))
 
 
 class ResNetLayers(BasicLayers):
@@ -407,7 +396,8 @@ class ResNetLayers(BasicLayers):
         """
         super().__init__(summary, visualize)
 
-    def _get_survival_rate(self, depth, survival_last_block=0.5):
+    @staticmethod
+    def _get_survival_rate(depth, survival_last_block=0.5):
         """
         Helper function to calculate the survival rate of a block according to stochastic depth.
         https://arxiv.org/abs/1603.09382
@@ -472,9 +462,10 @@ class ResNetLayers(BasicLayers):
                                     is_training=is_training, stride=1)
                 result = self._batch_normalization(tensor=result, is_training=is_training)
                 result = self._leaky_relu(tensor=result)
+                result = tf.reshape(result, (-1, 21, 2))
             else:
                 result = self.pred_layer(in_tensor, is_training)
-            return tf.reshape(result, (-1, 21, 2))
+            return result
 
     def _vanilla_branch(self, in_tensor, out_chan, is_training, strides=1, dilation=1):
         """
@@ -620,7 +611,7 @@ class ResNetLayers(BasicLayers):
         :return: Application of a default residual building block on the input
         """
         with tf.variable_scope(layer_name):
-            survival_rate = self._get_survival_rate(depth)
+            survival_rate = ResNetLayers._get_survival_rate(depth)
             threshold = tf.random_uniform([], minval=0, maxval=1, dtype=tf.float64)
             if first_layer:
                 if out_chan == ResNetLayers.MINIMAL_LAYERS:
@@ -632,11 +623,19 @@ class ResNetLayers(BasicLayers):
                 residual = self._vanilla_branch(in_tensor, out_chan=out_chan, is_training=is_training, strides=strides)
             else:
                 shortcut = in_tensor
-                branch = self._vanilla_branch(in_tensor, out_chan=out_chan, is_training=is_training)
-                branch_training = tf.cond(tf.less(survival_rate, threshold), lambda: branch,
-                                          lambda: tf.fill(tf.shape(branch), 0.0))
-                branch_inference = tf.multiply(branch, survival_rate)
-                residual = tf.cond(is_training, lambda: branch_training, lambda: branch_inference)
+
+                def branch():
+                    return self._vanilla_branch(in_tensor, out_chan=out_chan, is_training=is_training)
+
+                def training():
+                    dims = in_tensor.shape
+                    return tf.cond(tf.less(survival_rate, threshold), lambda: branch(),
+                                   lambda: tf.zeros([dims[0], out_chan, dims[2], dims[2]]))
+
+                def inference():
+                    return tf.multiply(branch(), survival_rate)
+
+                residual = tf.cond(is_training, lambda: training(), lambda: inference())
             return tf.add(residual, shortcut)
 
     def bottleneck(self, in_tensor, layer_name, out_chan, first_layer, is_training, depth=(0, 1)):
@@ -651,7 +650,7 @@ class ResNetLayers(BasicLayers):
         :return: Application of a bottleneck residual building block on the input
         """
         with tf.variable_scope(layer_name):
-            survival_rate = self._get_survival_rate(depth)
+            survival_rate = ResNetLayers._get_survival_rate(depth)
             threshold = tf.random_uniform([], minval=0, maxval=1, dtype=tf.float64)
             if first_layer:
                 if out_chan == ResNetLayers.MINIMAL_LAYERS:
@@ -664,11 +663,19 @@ class ResNetLayers(BasicLayers):
                                                    strides=strides)
             else:
                 shortcut = in_tensor
-                branch = self._bottleneck_branch(in_tensor, out_chan=out_chan, is_training=is_training)
-                branch_training = tf.cond(tf.less(survival_rate, threshold), lambda: branch,
-                                          lambda: tf.fill(tf.shape(branch), 0.0))
-                branch_inference = tf.multiply(branch, survival_rate)
-                residual = tf.cond(is_training, lambda: branch_training, lambda: branch_inference)
+
+                def branch():
+                    return self._bottleneck_branch(in_tensor, out_chan=out_chan, is_training=is_training)
+
+                def training():
+                    dims = in_tensor.shape
+                    return tf.cond(tf.less(survival_rate, threshold), lambda: branch(),
+                                   lambda: tf.zeros([dims[0], out_chan, dims[2], dims[2]]))
+
+                def inference():
+                    return tf.multiply(branch(), survival_rate)
+
+                residual = tf.cond(is_training, lambda: training(), lambda: inference())
             return tf.add(residual, shortcut)
 
     def inception(self, in_tensor, layer_name, out_chan, first_layer, is_training, depth=(0, 1)):
@@ -683,7 +690,7 @@ class ResNetLayers(BasicLayers):
         :return: Application of an InceptionNet based approach to a normal residual building block on the input
         """
         with tf.variable_scope(layer_name):
-            survival_rate = self._get_survival_rate(depth)
+            survival_rate = ResNetLayers._get_survival_rate(depth)
             threshold = tf.random_uniform([], minval=0, maxval=1, dtype=tf.float64)
             if first_layer:
                 if out_chan == ResNetLayers.MINIMAL_LAYERS:
@@ -696,11 +703,19 @@ class ResNetLayers(BasicLayers):
                                                   strides=strides)
             else:
                 shortcut = in_tensor
-                branch = self._inception_branch(in_tensor, out_chan=out_chan, is_training=is_training)
-                branch_training = tf.cond(tf.less(survival_rate, threshold), lambda: branch,
-                                          lambda: tf.fill(tf.shape(branch), 0.0))
-                branch_inference = tf.multiply(branch, survival_rate)
-                residual = tf.cond(is_training, lambda: branch_training, lambda: branch_inference)
+
+                def branch():
+                    return self._inception_branch(in_tensor, out_chan=out_chan, is_training=is_training)
+
+                def training():
+                    dims = in_tensor.shape
+                    return tf.cond(tf.less(survival_rate, threshold), lambda: branch(),
+                                   lambda: tf.zeros([dims[0], out_chan, dims[2], dims[2]]))
+
+                def inference():
+                    return tf.multiply(branch(), survival_rate)
+
+                residual = tf.cond(is_training, lambda: training(), lambda: inference())
             return tf.add(residual, shortcut)
 
     def bottleneck_inception(self, in_tensor, layer_name, out_chan, first_layer, is_training, depth=(0, 1)):
@@ -716,7 +731,7 @@ class ResNetLayers(BasicLayers):
         :return: Application of an InceptionNet based approach to a bottleneck residual building block on the input
         """
         with tf.variable_scope(layer_name):
-            survival_rate = self._get_survival_rate(depth)
+            survival_rate = ResNetLayers._get_survival_rate(depth)
             threshold = tf.random_uniform([], minval=0, maxval=1, dtype=tf.float64)
             if first_layer:
                 if out_chan == ResNetLayers.MINIMAL_LAYERS // 2:
@@ -729,11 +744,19 @@ class ResNetLayers(BasicLayers):
                                                              strides=strides)
             else:
                 shortcut = in_tensor
-                branch = self._bottleneck_inception_branch(in_tensor, out_chan=out_chan, is_training=is_training)
-                branch_training = tf.cond(tf.less(survival_rate, threshold), lambda: branch,
-                                          lambda: tf.fill(tf.shape(branch), 0.0))
-                branch_inference = tf.multiply(branch, survival_rate)
-                residual = tf.cond(is_training, lambda: branch_training, lambda: branch_inference)
+
+                def branch():
+                    return self._bottleneck_inception_branch(in_tensor, out_chan=out_chan, is_training=is_training)
+
+                def training():
+                    dims = in_tensor.shape
+                    return tf.cond(tf.less(survival_rate, threshold), lambda: branch(),
+                                   lambda: tf.zeros([dims[0], out_chan, dims[2], dims[2]]))
+
+                def inference():
+                    return tf.multiply(branch(), survival_rate)
+
+                residual = tf.cond(is_training, lambda: training(), lambda: inference())
             return tf.add(residual, shortcut)
 
     def vanilla_dilation(self, in_tensor, layer_name, out_chan, first_layer, is_training, depth=(0, 1)):
@@ -749,18 +772,26 @@ class ResNetLayers(BasicLayers):
         :return: Application of the modified default residual building block on the input
         """
         with tf.variable_scope(layer_name):
-            survival_rate = self._get_survival_rate(depth)
+            survival_rate = ResNetLayers._get_survival_rate(depth)
             threshold = tf.random_uniform([], minval=0, maxval=1, dtype=tf.float64)
             if first_layer:
                 shortcut = self._shortcut(in_tensor, out_chan=out_chan, is_bottleneck=False, is_training=is_training)
                 residual = self._vanilla_branch(in_tensor, out_chan=out_chan, is_training=is_training, dilation=2)
             else:
                 shortcut = in_tensor
-                branch = self._vanilla_branch(in_tensor, out_chan=out_chan, is_training=is_training, dilation=2)
-                branch_training = tf.cond(tf.less(survival_rate, threshold), lambda: branch,
-                                          lambda: tf.fill(tf.shape(branch), 0.0))
-                branch_inference = tf.multiply(branch, survival_rate)
-                residual = tf.cond(is_training, lambda: branch_training, lambda: branch_inference)
+
+                def branch():
+                    return self._vanilla_branch(in_tensor, out_chan=out_chan, is_training=is_training, dilation=2)
+
+                def training():
+                    dims = in_tensor.shape
+                    return tf.cond(tf.less(survival_rate, threshold), lambda: branch(),
+                                   lambda: tf.zeros([dims[0], out_chan, dims[2], dims[2]]))
+
+                def inference():
+                    return tf.multiply(branch(), survival_rate)
+
+                residual = tf.cond(is_training, lambda: training(), lambda: inference())
             return tf.add(residual, shortcut)
 
     def bottleneck_dilation(self, in_tensor, layer_name, out_chan, first_layer, is_training, depth=(0, 1)):
@@ -776,18 +807,26 @@ class ResNetLayers(BasicLayers):
         :return: Application of the modified bottleneck residual building block on the input
         """
         with tf.variable_scope(layer_name):
-            survival_rate = self._get_survival_rate(depth)
+            survival_rate = ResNetLayers._get_survival_rate(depth)
             threshold = tf.random_uniform([], minval=0, maxval=1, dtype=tf.float64)
             if first_layer:
                 shortcut = self._shortcut(in_tensor, out_chan=out_chan, is_bottleneck=True, is_training=is_training)
                 residual = self._bottleneck_branch(in_tensor, out_chan=out_chan, is_training=is_training, dilation=2)
             else:
                 shortcut = in_tensor
-                branch = self._bottleneck_branch(in_tensor, out_chan=out_chan, is_training=is_training, dilation=2)
-                branch_training = tf.cond(tf.less(survival_rate, threshold), lambda: branch,
-                                          lambda: tf.fill(tf.shape(branch), 0.0))
-                branch_inference = tf.multiply(branch, survival_rate)
-                residual = tf.cond(is_training, lambda: branch_training, lambda: branch_inference)
+
+                def branch():
+                    return self._bottleneck_branch(in_tensor, out_chan=out_chan, is_training=is_training, dilation=2)
+
+                def training():
+                    dims = in_tensor.shape
+                    return tf.cond(tf.less(survival_rate, threshold), lambda: branch(),
+                                   lambda: tf.zeros([dims[0], out_chan, dims[2], dims[2]]))
+
+                def inference():
+                    return tf.multiply(branch(), survival_rate)
+
+                residual = tf.cond(is_training, lambda: training(), lambda: inference())
             return tf.add(residual, shortcut)
 
     def inception_dilation(self, in_tensor, layer_name, out_chan, first_layer, is_training, depth=(0, 1)):
@@ -804,18 +843,26 @@ class ResNetLayers(BasicLayers):
         :return: Application of the modified default residual building block based on InceptionNet on the input
         """
         with tf.variable_scope(layer_name):
-            survival_rate = self._get_survival_rate(depth)
+            survival_rate = ResNetLayers._get_survival_rate(depth)
             threshold = tf.random_uniform([], minval=0, maxval=1, dtype=tf.float64)
             if first_layer:
                 shortcut = self._shortcut(in_tensor, out_chan=out_chan, is_bottleneck=False, is_training=is_training)
                 residual = self._inception_branch(in_tensor, out_chan=out_chan, is_training=is_training, dilation=2)
             else:
                 shortcut = in_tensor
-                branch = self._inception_branch(in_tensor, out_chan=out_chan, is_training=is_training, dilation=2)
-                branch_training = tf.cond(tf.less(survival_rate, threshold), lambda: branch,
-                                          lambda: tf.fill(tf.shape(branch), 0.0))
-                branch_inference = tf.multiply(branch, survival_rate)
-                residual = tf.cond(is_training, lambda: branch_training, lambda: branch_inference)
+
+                def branch():
+                    return self._inception_branch(in_tensor, out_chan=out_chan, is_training=is_training, dilation=2)
+
+                def training():
+                    dims = in_tensor.shape
+                    return tf.cond(tf.less(survival_rate, threshold), lambda: branch(),
+                                   lambda: tf.zeros([dims[0], out_chan, dims[2], dims[2]]))
+
+                def inference():
+                    return tf.multiply(branch(), survival_rate)
+
+                residual = tf.cond(is_training, lambda: training(), lambda: inference())
             return tf.add(residual, shortcut)
 
     def bottleneck_inception_dilation(self, in_tensor, layer_name, out_chan, first_layer, is_training, depth=(0, 1)):
@@ -832,7 +879,7 @@ class ResNetLayers(BasicLayers):
         :return: Application of the modified bottleneck residual building block based on InceptionNet on the input
         """
         with tf.variable_scope(layer_name):
-            survival_rate = self._get_survival_rate(depth)
+            survival_rate = ResNetLayers._get_survival_rate(depth)
             threshold = tf.random_uniform([], minval=0, maxval=1, dtype=tf.float64)
             if first_layer:
                 shortcut = self._shortcut(in_tensor, out_chan=out_chan, is_bottleneck=True, is_training=is_training)
@@ -840,12 +887,20 @@ class ResNetLayers(BasicLayers):
                                                              dilation=2)
             else:
                 shortcut = in_tensor
-                branch = self._bottleneck_inception_branch(in_tensor, out_chan=out_chan, is_training=is_training,
-                                                           dilation=2)
-                branch_training = tf.cond(tf.less(survival_rate, threshold), lambda: branch,
-                                          lambda: tf.fill(tf.shape(branch), 0.0))
-                branch_inference = tf.multiply(branch, survival_rate)
-                residual = tf.cond(is_training, lambda: branch_training, lambda: branch_inference)
+
+                def branch():
+                    return self._bottleneck_inception_branch(in_tensor, out_chan=out_chan, is_training=is_training,
+                                                             dilation=2)
+
+                def training():
+                    dims = in_tensor.shape
+                    return tf.cond(tf.less(survival_rate, threshold), lambda: branch(),
+                                   lambda: tf.zeros([dims[0], out_chan, dims[2], dims[2]]))
+
+                def inference():
+                    return tf.multiply(branch(), survival_rate)
+
+                residual = tf.cond(is_training, lambda: training(), lambda: inference())
             return tf.add(residual, shortcut)
 
 
