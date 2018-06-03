@@ -28,9 +28,9 @@ class ResNet(BaseModel):
         rgb_image = input_tensors['img']
         keypoints = input_tensors['kp_2D']
         is_visible = input_tensors['vis_2D']
-        resnet = rnl(self.summary, False)
+        resnet = rnl(self.summary, visualize=True, full_preactivation=False)
 
-        with tf.variable_scope('resnet34'):
+        with tf.variable_scope('resnet50'):
             resnet_reps = resnet_repetitions_normal
             resnet_blockcount = np.sum(resnet_reps) - 4
             depth_count = 0
@@ -45,7 +45,7 @@ class ResNet(BaseModel):
                     #                                     is_training=self.is_training,
                     #                                     depth=(depth_count, resnet_blockcount_normal))
                     # else:
-                    image = resnet.vanilla(image, layer_name='conv%d_%d' % (i + 2, j + 1),
+                    image = resnet.bottleneck(image, layer_name='conv%d_%d' % (i + 2, j + 1),
                                                first_layer=(j == 0), out_chan=resnet_channels[i],
                                                is_training=self.is_training)
                                                # depth=(depth_count, resnet_blockcount))

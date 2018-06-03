@@ -63,7 +63,7 @@ def shear(img, kp_2D, angle=None, scale=1):
 def rotate(img, kp_2D, angle=None, scale=1):
     """Rotation by angle"""
     if angle is None:
-        transform = iaa.Affine(rotate=(-45, 45), scale=0.70)  # scale = 1 / sqrt(2)
+        transform = iaa.Affine(rotate=(-90, 90), scale=0.70)  # scale = 1 / sqrt(2)
     else:
         transform = iaa.Affine(rotate=angle, scale=scale)
     seq = iaa.Sequential([transform]).to_deterministic()
