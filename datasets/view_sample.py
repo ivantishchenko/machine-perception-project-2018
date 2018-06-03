@@ -14,9 +14,9 @@ def view_group(dataset, count = -1, offset = 0, normalized = False):
     for i in range(offset, samples):
         img = dataset['img'][i]
         kp_2D = dataset['kp_2D'][i]
-        kpx = kp_2D[:,0]
-        kpy = kp_2D[:,1]
-        img = img.transpose(1,2,0)
+        kpx = kp_2D[:, 0]
+        kpy = kp_2D[:, 1]
+        img = img.transpose(1, 2, 0)
         if normalized:
             # Image colours are set to 2 * ([0, 1] - 0.5] == [-1, 1]
             img = 2 * ((img / 255) - 0.5)

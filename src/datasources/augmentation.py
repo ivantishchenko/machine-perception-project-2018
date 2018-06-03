@@ -13,66 +13,67 @@ colours = {0: 'black', 1: 'blue', 2: 'orange', 3: 'green', 4: 'red', 5: 'yellow'
 """TRANSFORMATIONS"""
 
 
-def salt_pepper(img, kp_2D, val=0.01):
+def salt_pepper(img, val=0.01):
     """Perform salt and pepper"""
     seq = iaa.Sequential([
         iaa.SaltAndPepper(val)
     ])
     image_aug = seq.augment_image(img)
-    return image_aug, kp_2D
+    return image_aug
 
 
-def dropout(img, kp_2D, val=0.01):
+def dropout(img, val=0.01):
     """Perform dropout"""
     seq = iaa.Sequential([
         iaa.Dropout(val)
     ])
     image_aug = seq.augment_image(img)
-    return image_aug, kp_2D
+    return image_aug
 
 
-def change_brightness(img, kp_2D, factor=(0.75, 1.25)):
+def change_brightness(img, factor=(0.8, 1.2)):
     """Change brightness"""
     seq = iaa.Sequential([
         iaa.Multiply(factor)
     ])
     image_aug = seq.augment_image(img)
-    return image_aug, kp_2D
+    return image_aug
 
 
-def change_contrast(img, kp_2D, factor=(0.75, 1.25)):
+def change_contrast(img, factor=(0.8, 1.2)):
     """Change contrast"""
     seq = iaa.Sequential([
         iaa.ContrastNormalization(factor)
     ])
     image_aug = seq.augment_image(img)
-    return image_aug, kp_2D
+    return image_aug
 
 
 def shear(img, kp_2D, angle=None, scale=1):
     """Shearing"""
     if angle is None:
-        transform = iaa.Affine(shear=(-15, 15), scale=0.78)
+        transform = iaa.Affine(shear=(-15, 15), scale=0.78)  # scale = 1 / (tan(shear) + 1)
     else:
         transform = iaa.Affine(shear=angle, scale=scale)
-    seq = iaa.Sequential([transform])
-
-    seq_det = seq.to_deterministic()
-    image_aug, keypoints_aug = perform_augmentation_all(seq_det, img, kp_2D)
+    seq = iaa.Sequential([transform]).to_deterministic()
+    image_aug, keypoints_aug = perform_augmentation_all(seq, img, kp_2D)
     return image_aug, keypoints_aug
 
 
-# WARNING CHECK VISIBILITY WHEN ROTATING BY NOT 90
 def rotate(img, kp_2D, angle=None, scale=1):
     """Rotation by angle"""
     if angle is None:
-        transform = iaa.Affine(rotate=(-90, 90), scale=0.7)
+        transform = iaa.Affine(rotate=(-45, 45), scale=0.70)  # scale = 1 / sqrt(2)
     else:
         transform = iaa.Affine(rotate=angle, scale=scale)
-        
-    seq = iaa.Sequential([transform])
-    seq_det = seq.to_deterministic()
-    image_aug, keypoints_aug = perform_augmentation_all(seq_det, img, kp_2D)
+    seq = iaa.Sequential([transform]).to_deterministic()
+    image_aug, keypoints_aug = perform_augmentation_all(seq, img, kp_2D)
+    return image_aug, keypoints_aug
+
+def scale(img, kp_2D, scale=1):
+    """Scale by amount"""
+    seq = iaa.Sequential([iaa.Affine(scale=scale)]).to_deterministic()
+    image_aug, keypoints_aug = perform_augmentation_all(seq, img, kp_2D)
     return image_aug, keypoints_aug
 
 
@@ -92,17 +93,17 @@ def flip_horizontal(img, kp_2D):
         iaa.Fliplr(1.0)  # Horizontal flip
     ])
     image_aug, keypoints_aug = perform_augmentation_all(seq, img, kp_2D)
+    # keypoints_aug[:, 0] += 1
     return image_aug, keypoints_aug
 
 
-def get_vis(keypoints_aug, original_visibility):
+def get_vis(keypoints_aug, original_visibility, img_bound=128):
     """Check visibility of the keypoints"""
-    vis1 = np.any(keypoints_aug > 128, axis=1)
-    vis2 = np.any(keypoints_aug < 0, axis=1)
+    vis1 = np.any(keypoints_aug > img_bound + 1, axis=1)
+    vis2 = np.any(keypoints_aug < -1, axis=1)
     vis = ~(vis1 + vis2)
     vis = vis.astype(int).reshape(21, 1)
     vis = np.bitwise_and(original_visibility, vis)
-
     return vis
 
 # def check_vis_inif(keypoints_aug):
@@ -152,7 +153,6 @@ def show_image(img, kp_2D):
 
 def default_processing(original_img, original_kp_2D):
     img = original_img.transpose(1, 2, 0)
-    # img = img / 255.0
 
     img, kp_2D = crop_hand(img, original_kp_2D)
     img, kp_2D = resize(img, kp_2D, (128, 128))

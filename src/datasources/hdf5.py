@@ -118,39 +118,51 @@ class HDF5Source(BaseDataSource):
         res_size = (128, 128)
         img = entry['img'].transpose(1, 2, 0)
 
+        def accept_opt(t_img, t_kp_2D, img, kp_2D, visibility):
+            _vis = aug.get_vis(t_kp_2D, visibility, t_img.shape[1])
+            if np.array_equal(_vis, visibility):
+                return t_img, t_kp_2D
+            else:
+                return img, kp_2D
+
         if self.validation or not self.testing:
             kp_2D = entry['kp_2D']
             if not self.validation:
-                kp_var = iaa.Sequential([  # Keypoint variant modifications
-                    iaa.Flipud(0.5),  # 50% chance to flip horizontally
-                    iaa.Fliplr(0.5),  # 50% chance to flip vertically
-                    iaa.Affine(scale=0.63,  # Ensures none of the following ops put keypoints out of the image
-                               rotate=(-90, 90),  # Rotate the image between [-90, 90] degrees randomly
-                               shear=(-15, 15)  # Shear the image between [-15, 15] degrees randomly
-                               )
-                ]).to_deterministic()
-                kp_invar = iaa.Sequential([  # Keypoint invariant modifications
-                    iaa.SomeOf((0, None), [  # Run up to all operations
-                        iaa.ContrastNormalization((0.8, 1.2)),  # Contrast modifications
-                        iaa.Multiply((0.8, 1.2)),  # Brightness modifications
-                        iaa.Dropout(0.01),  # Drop out single pixels
-                        iaa.SaltAndPepper(0.01)  # Add salt-n-pepper noise
-                    ], random_order=True)  # Randomize the order of operations
-                ]).to_deterministic()
-
                 augmentation_flag = np.random.binomial(1, 0.7)
                 if augmentation_flag == 0:
-                    img, kp_2D = aug.perform_augmentation_all(kp_var, img, kp_2D)
+                    op_array = np.random.randint(2, size=aug.NUM_TRANSFORMATIONS)
+                    if op_array[2] == 1:
+                        _img, _kp_2D = aug.rotate(img, kp_2D)
+                        img, kp_2D = accept_opt(_img, _kp_2D, img, kp_2D, entry['vis_2D'])
+                    if op_array[3] == 1:
+                        _img, _kp_2D = aug.shear(img, kp_2D)
+                        img, kp_2D = accept_opt(_img, _kp_2D, img, kp_2D, entry['vis_2D'])
 
-                img, kp_2D = crop_hand(img, kp_2D)
-                img, kp_2D = resize(img, kp_2D, res_size)
-                # Update keypoint visibility (this should be equal to noop for the current design, no points go out
-                # of the image
-                entry['vis_2D'] = aug.get_vis(kp_2D, entry['vis_2D'])
+                    img, kp_2D = crop_hand(img, kp_2D)
+                    img, kp_2D = resize(img, kp_2D, res_size)
 
-                if augmentation_flag == 0:
-                    img, kp_2D = aug.perform_augmentation_all(kp_invar, img, kp_2D)
+                    if op_array[0] == 1:
+                        _img, _kp_2D = aug.flip_horizontal(img, kp_2D)
+                        img, kp_2D = accept_opt(_img, _kp_2D, img, kp_2D, entry['vis_2D'])
+                    if op_array[1] == 1:
+                        _img, _kp_2D = aug.flip_vertical(img, kp_2D)
+                        img, kp_2D = accept_opt(_img, _kp_2D, img, kp_2D, entry['vis_2D'])
 
+                    if op_array[4] == 1:
+                        img = aug.change_contrast(img)
+                    if op_array[5] == 1:
+                        img = aug.change_brightness(img)
+                    if op_array[6] == 1:
+                        img = aug.dropout(img)
+                    if op_array[7] == 1:
+                        img = aug.salt_pepper(img)
+
+                    # Update keypoint visibility (this should be equal to noop for the current design, no points go out
+                    # of the image
+                    entry['vis_2D'] = aug.get_vis(kp_2D, entry['vis_2D'])
+                else:
+                    img, kp_2D = crop_hand(img, kp_2D)
+                    img, kp_2D = resize(img, kp_2D, res_size)
             else:
                 img, kp_2D = crop_hand(img, kp_2D)
                 img, kp_2D = resize(img, kp_2D, res_size)

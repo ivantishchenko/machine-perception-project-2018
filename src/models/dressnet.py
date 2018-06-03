@@ -47,8 +47,8 @@ class ResNet(BaseModel):
                     # else:
                     image = resnet.vanilla(image, layer_name='conv%d_%d' % (i + 2, j + 1),
                                                first_layer=(j == 0), out_chan=resnet_channels[i],
-                                               is_training=self.is_training,
-                                               depth=(depth_count, resnet_blockcount))
+                                               is_training=self.is_training)
+                                               # depth=(depth_count, resnet_blockcount))
 
             # image = resnet._max_pool(image, pool=4)
             image = resnet.last_layer(image, is_training=self.is_training, use_4k=False, use_upconv=False)
