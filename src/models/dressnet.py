@@ -7,12 +7,12 @@ from util.common_ops import ResNetLayers as rnl
 
 # CONSTANTS
 resnet_features = [64, 128, 256, 512]
-resnet_features_experimental = [32, 64, 128, 256, 512]
+resnet_features_experimental = [16, 32, 64, 128, 256, 512]
 resnet_repetitions_small = [2, 2, 2, 2]
 resnet_repetitions_normal = [3, 4, 6, 3]
 resnet_repetitions_large = [3, 4, 23, 3]
 resnet_repetitions_extra = [3, 8, 36, 3]
-resnet_repetitions_experimental = [3, 4, 4, 6, 3]
+resnet_repetitions_experimental = [3, 2, 3, 4, 6, 3]
 
 
 # HYPER PARAMETERS
