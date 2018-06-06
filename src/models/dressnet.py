@@ -6,17 +6,23 @@ from core import BaseDataSource, BaseModel
 from util.common_ops import ResNetLayers as rnl
 
 # CONSTANTS
-resnet_channels = [64, 128, 256, 512]
+resnet_features = [64, 128, 256, 512]
+resnet_features_experimental = [8, 16, 32, 64, 128, 256, 512]
 resnet_repetitions_small = [2, 2, 2, 2]
 resnet_repetitions_normal = [3, 4, 6, 3]
 resnet_repetitions_large = [3, 4, 23, 3]
 resnet_repetitions_extra = [3, 8, 36, 3]
+resnet_repetitions_experimental = [1, 3, 2, 2, 2, 2, 2]
 
 
 # HYPER PARAMETERS
 CROPSIZE = 128
 ACCURACY_DISTANCE = 2
+FULL_PREACTIVATION = False
 USE_4K = False
+USE_UPCONVOLUTION = False
+RESNET_FEATURES = resnet_features_experimental
+RESNET_REPETITIONS = resnet_repetitions_experimental
 
 
 class ResNet(BaseModel):
@@ -28,34 +34,23 @@ class ResNet(BaseModel):
         rgb_image = input_tensors['img']
         keypoints = input_tensors['kp_2D']
         is_visible = input_tensors['vis_2D']
-        resnet = rnl(self.summary, visualize=True, full_preactivation=False)
+        resnet = rnl(self.summary, visualize=True,
+                     minimal_features=RESNET_FEATURES[0], full_preactivation=FULL_PREACTIVATION)
+        image = rgb_image
 
-        with tf.variable_scope('resnet50'):
-            resnet_reps = resnet_repetitions_normal
-            resnet_blockcount = np.sum(resnet_reps) - 4
-            depth_count = 0
-            image = resnet.init_block(rgb_image, self.is_training)
+        with tf.variable_scope('resnet-experimental'):
+            resnet_reps = RESNET_REPETITIONS
             for i, layers in enumerate(resnet_reps):
                 for j in range(layers):
-                    # if j != 0:
-                    #     depth_count = depth_count + 1
-                    # if layers == resnet_repetitions_normal[-1]:
-                    #     image = resnet.vanilla_dilation(image, layer_name='conv%d_%d' % (i + 2, j + 1),
-                    #                                     first_layer=(j == 0), out_chan=resnet_channels[i],
-                    #                                     is_training=self.is_training,
-                    #                                     depth=(depth_count, resnet_blockcount_normal))
-                    # else:
-                    image = resnet.bottleneck(image, layer_name='conv%d_%d' % (i + 2, j + 1),
-                                               first_layer=(j == 0), out_chan=resnet_channels[i],
-                                               is_training=self.is_training)
-                                               # depth=(depth_count, resnet_blockcount))
+                    image = resnet.vanilla(image, layer_name='conv%d_%d' % (i, j + 1),
+                                           first_layer=(j == 0), out_chan=RESNET_FEATURES[i],
+                                           is_training=self.is_training)
 
-            # image = resnet._max_pool(image, pool=4)
-            image = resnet.last_layer(image, is_training=self.is_training, use_4k=False, use_upconv=False)
+            image = resnet.last_layer(image, is_training=self.is_training, use_4k=USE_4K, use_upconv=USE_UPCONVOLUTION)
             self.summary.histogram('last_layer', image)
 
         with tf.variable_scope('flatten'):
-            result = resnet.prediction_layer(image, is_training=self.is_training, use_4k=False)
+            result = resnet.prediction_layer(image, is_training=self.is_training, use_4k=USE_4K)
 
         with tf.variable_scope('loss_calculation'):
             # Include all keypoints for metrics. These are rougher scores.

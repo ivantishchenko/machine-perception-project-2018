@@ -386,17 +386,18 @@ class ResNetLayers(BasicLayers):
     Additionally stochastic depth can be enabled for each of the building blocks when called using public functions.
     """
     # http://torch.ch/blog/2016/02/04/resnets.html
-    MINIMAL_LAYERS = 64
-    FULL_PREACTIVATION=False
+    MINIMAL_FEATURES = 64
+    FULL_PREACTIVATION = False
 
-    def __init__(self, summary, visualize=False, full_preactivation=False):
+    def __init__(self, summary, visualize=False, minimal_features=64, full_preactivation=False):
         """
         Default constructor.
         :param summary: Summary object to allow logging.
         :param visualize: Enable logging?
         """
         super().__init__(summary, visualize)
-        self.FULL_PREACTIVATION=full_preactivation
+        self.MINIMAL_FEATURES = minimal_features
+        self.FULL_PREACTIVATION = full_preactivation
 
     @staticmethod
     def _get_survival_rate(depth, survival_last_block=0.5):
@@ -703,7 +704,7 @@ class ResNetLayers(BasicLayers):
         """
         with tf.variable_scope(layer_name):
             if first_layer:
-                if out_chan == ResNetLayers.MINIMAL_LAYERS:
+                if out_chan == ResNetLayers.MINIMAL_FEATURES:
                     strides = 1
                 else:
                     strides = 2
@@ -746,7 +747,7 @@ class ResNetLayers(BasicLayers):
         """
         with tf.variable_scope(layer_name):
             if first_layer:
-                if out_chan == ResNetLayers.MINIMAL_LAYERS:
+                if out_chan == ResNetLayers.MINIMAL_FEATURES:
                     strides = 1
                 else:
                     strides = 2
@@ -790,7 +791,7 @@ class ResNetLayers(BasicLayers):
         """
         with tf.variable_scope(layer_name):
             if first_layer:
-                if out_chan == ResNetLayers.MINIMAL_LAYERS:
+                if out_chan == ResNetLayers.MINIMAL_FEATURES:
                     strides = 1
                 else:
                     strides = 2
@@ -835,7 +836,7 @@ class ResNetLayers(BasicLayers):
         """
         with tf.variable_scope(layer_name):
             if first_layer:
-                if out_chan == ResNetLayers.MINIMAL_LAYERS // 2:
+                if out_chan == ResNetLayers.MINIMAL_FEATURES // 2:
                     strides = 1
                 else:
                     strides = 2
