@@ -704,7 +704,7 @@ class ResNetLayers(BasicLayers):
         """
         with tf.variable_scope(layer_name):
             if first_layer:
-                if out_chan == ResNetLayers.MINIMAL_FEATURES:
+                if out_chan == self.MINIMAL_FEATURES:
                     strides = 1
                 else:
                     strides = 2
@@ -747,7 +747,7 @@ class ResNetLayers(BasicLayers):
         """
         with tf.variable_scope(layer_name):
             if first_layer:
-                if out_chan == ResNetLayers.MINIMAL_FEATURES:
+                if out_chan == self.MINIMAL_FEATURES:
                     strides = 1
                 else:
                     strides = 2
@@ -791,7 +791,7 @@ class ResNetLayers(BasicLayers):
         """
         with tf.variable_scope(layer_name):
             if first_layer:
-                if out_chan == ResNetLayers.MINIMAL_FEATURES:
+                if out_chan == self.MINIMAL_FEATURES:
                     strides = 1
                 else:
                     strides = 2
@@ -836,7 +836,7 @@ class ResNetLayers(BasicLayers):
         """
         with tf.variable_scope(layer_name):
             if first_layer:
-                if out_chan == ResNetLayers.MINIMAL_FEATURES // 2:
+                if out_chan == self.MINIMAL_FEATURES // 2:
                     strides = 1
                 else:
                     strides = 2

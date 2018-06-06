@@ -39,8 +39,7 @@ class ResNet(BaseModel):
         image = rgb_image
 
         with tf.variable_scope('resnet-experimental'):
-            resnet_reps = RESNET_REPETITIONS
-            for i, layers in enumerate(resnet_reps):
+            for i, layers in enumerate(RESNET_REPETITIONS):
                 for j in range(layers):
                     image = resnet.vanilla(image, layer_name='conv%d_%d' % (i, j + 1),
                                            first_layer=(j == 0), out_chan=RESNET_FEATURES[i],
