@@ -80,7 +80,6 @@ class MvitNet(BaseModel):
         input_tensors = data_source.output_tensors
         x = input_tensors['img']
         y = input_tensors['kp_2D']
-        is_visible = input_tensors['vis_2D']
         bn_axis = 1
 
         with tf.variable_scope('resnet50'):
@@ -126,17 +125,10 @@ class MvitNet(BaseModel):
             corr = tf.count_nonzero(tf.less_equal(tf.squared_difference(x, y), ACCURACY_DISTANCE))
             precision = corr / (y.shape[0] * y.shape[1] * y.shape[2])
 
-            count_vis = tf.count_nonzero(tf.multiply(y, is_visible))
-            loss_mse_vis = tf.multiply(tf.squared_difference(x, y), is_visible)
-            loss_mse_vis = tf.reduce_sum(tf.truediv(loss_mse_vis, tf.cast(count_vis, dtype=tf.float32)))
-            corr_vis = tf.count_nonzero(tf.less_equal(tf.multiply(tf.squared_difference(x, y), is_visible), ACCURACY_DISTANCE))
-            precision_visible = tf.divide(corr_vis, count_vis)
 
         # Define outputs
         loss_terms = {  # To optimize
             'kp_loss_mse': loss_mse,
             'kp_accuracy': precision,
-            'kp_loss_mse_vis': loss_mse_vis,
-            'kp_accuracy_vis': precision_visible
         }
         return {'kp_2D': x}, loss_terms, {}

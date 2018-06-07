@@ -6,7 +6,7 @@ import tensorflow as tf
 
 # HYPER PARAMETER TUNINGS HERE
 BATCHSIZE = 8
-EPOCHS = 45
+EPOCHS = 40
 
 if __name__ == '__main__':
 
@@ -43,12 +43,12 @@ if __name__ == '__main__':
                     'loss_terms_to_optimize': {
                         'kp_loss_mse': ['resnet50', 'flatten', 'loss_calculation'],
                     },
-                    'metrics': ['kp_loss_mse', 'kp_accuracy', 'kp_loss_mse_vis', 'kp_accuracy_vis'],
+                    'metrics': ['kp_loss_mse', 'kp_accuracy'],
                     'learning_rate': 1e-4,
                 },
             ],
 
-            test_losses_or_metrics=['kp_loss_mse', 'kp_accuracy', 'kp_loss_mse_vis', 'kp_accuracy_vis'],
+            test_losses_or_metrics=['kp_loss_mse', 'kp_accuracy'],
 
             # Data sources for training and testing.
             train_data={
