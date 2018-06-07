@@ -8,11 +8,5 @@
 
 # __all__ = ('ExampleNet', 'VGG16', 'AlexNet', 'MnistNet', 'DenseNet')
 
-# HelloWorld Ivan
-
-from .example import ExampleNet
-from .ivan import NewModel
-from .cpm import Glover
-from .trivialnet import TrivialNet
-from .dressnet import ResNet
-__all__ = ('ExampleNet', 'NewModel', 'Glover', 'TrivialNet', 'ResNet')
+from .mvitnet import MvitNet
+__all__ = ('MvitNet')
