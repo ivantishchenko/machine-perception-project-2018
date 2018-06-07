@@ -12,7 +12,7 @@ resnet_repetitions_small = [2, 2, 2, 2]
 resnet_repetitions_normal = [3, 4, 6, 3]
 resnet_repetitions_large = [3, 4, 23, 3]
 resnet_repetitions_extra = [3, 8, 36, 3]
-resnet_repetitions_experimental = [3, 2, 3, 4, 6, 3]
+resnet_repetitions_experimental = [3, 4, 5, 6]
 
 
 # HYPER PARAMETERS
@@ -21,7 +21,7 @@ ACCURACY_DISTANCE = 2
 FULL_PREACTIVATION = False
 USE_4K = False
 USE_UPCONVOLUTION = False
-RESNET_FEATURES = resnet_features_experimental
+RESNET_FEATURES = resnet_features
 RESNET_REPETITIONS = resnet_repetitions_experimental
 
 
@@ -39,6 +39,7 @@ class ResNet(BaseModel):
         image = rgb_image
 
         with tf.variable_scope('resnet-experimental'):
+            image = resnet.init_block(image, self.is_training)
             for i, layers in enumerate(RESNET_REPETITIONS):
                 for j in range(layers):
                     image = resnet.vanilla(image, layer_name='conv%d_%d' % (i, j + 1),
