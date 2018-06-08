@@ -445,7 +445,7 @@ class ResNetLayers(BasicLayers):
                     tensor = self._conv(tensor=tensor, kernel_size=1, out_chan=2048, is_training=is_training, stride=1,
                                         name='conv2d-1')
                 tensor = tf.layers.average_pooling2d(tensor, pool_size=4, strides=1, data_format='channels_first',
-                                                     padding='same', name='average_pool')
+                                                     padding='valid', name='average_pool')
                 if not self.FULL_PREACTIVATION:
                     tensor = self._conv(tensor, kernel_size=1, out_chan=4096, is_training=is_training, stride=1,
                                         name='conv2d-2')
@@ -465,10 +465,10 @@ class ResNetLayers(BasicLayers):
                     tensor = self._upconv(tensor=tensor, kernel_size=3, out_chan=in_tensor.shape[1],
                                           is_training=is_training, stride=2, name='conv2d_t')
                 return tf.layers.average_pooling2d(tensor, pool_size=4, strides=1, data_format='channels_first',
-                                                   padding='same', name='average_pool')
+                                                   padding='valid', name='average_pool')
             else:
                 return tf.layers.average_pooling2d(tensor, pool_size=4, strides=1, data_format='channels_first',
-                                                   padding='same', name='average_pool')
+                                                   padding='valid', name='average_pool')
 
     def prediction_layer(self, in_tensor, is_training, use_4k=False):
 

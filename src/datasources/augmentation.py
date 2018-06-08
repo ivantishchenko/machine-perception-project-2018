@@ -83,6 +83,7 @@ def flip_vertical(img, kp_2D):
         iaa.Flipud(1.0)  # Vertical vertical
     ])
     image_aug, keypoints_aug = perform_augmentation_all(seq, img, kp_2D)
+    # keypoints_aug[:, 1] += 1
     return image_aug, keypoints_aug
 
 
@@ -121,6 +122,7 @@ def perform_augmentation_all(seq, img, kp_2D):
     # do augmentation
     image_aug, keypoints_aug = augment(seq, img, keypoints)
     #formating back to numpy
+    # keypoints_aug = np.around(format_nparray(keypoints_aug), decimals=1)
     keypoints_aug = format_nparray(keypoints_aug)
     return image_aug, keypoints_aug
 

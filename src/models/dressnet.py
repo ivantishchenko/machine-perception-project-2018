@@ -22,7 +22,7 @@ FULL_PREACTIVATION = False
 USE_4K = False
 USE_UPCONVOLUTION = False
 RESNET_FEATURES = resnet_features
-RESNET_REPETITIONS = resnet_repetitions_experimental
+RESNET_REPETITIONS = resnet_repetitions_normal
 
 
 class ResNet(BaseModel):
