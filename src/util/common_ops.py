@@ -156,7 +156,7 @@ class BasicLayers(object):
         :param use_batch_stats: Non-used variable for the moment
         :return: Application of batch-normalization on the layer
         """
-        __momentum = 0.97
+        __momentum = 0.99
         __scale = True
 
         def __official_bn():
@@ -164,7 +164,7 @@ class BasicLayers(object):
                 inputs=tensor,
                 axis=self.CHANNEL_AXIS,
                 momentum=__momentum,
-                epsilon=0.001,
+                epsilon=0.0001,
                 center=True,
                 scale=__scale,
                 beta_initializer=tf.zeros_initializer(),
@@ -175,7 +175,7 @@ class BasicLayers(object):
                 gamma_regularizer=None,
                 beta_constraint=None,
                 gamma_constraint=None,
-                training=True,
+                training=is_training,
                 name=name,
                 reuse=None,
                 renorm=False,
@@ -192,18 +192,18 @@ class BasicLayers(object):
                 decay=__momentum,  # 0.999
                 center=True,
                 scale=__scale,  # False
-                epsilon=0.001,
+                epsilon=0.0001,
                 activation_fn=None,
                 param_initializers=None,
                 param_regularizers=None,
                 updates_collections=None,  # tf.GraphKeys.UPDATE_OPS,
-                is_training=True,  # is_training would be more correct but validation performance is strange with it
+                is_training=is_training,  # is_training would be more correct but validation performance is strange with it
                 reuse=None,
                 variables_collections=None,
                 outputs_collections=None,
                 trainable=True,
                 batch_weights=None,
-                fused=None,
+                fused=True,
                 data_format='NCHW',  # DATA_FORMAT_NHWC
                 zero_debias_moving_mean=False,
                 scope=None,
@@ -418,7 +418,7 @@ class ResNetLayers(BasicLayers):
         :return: Application of the initial layer block on the input
         """
         with tf.variable_scope('resnet_init'):
-            tensor = self._conv(tensor=in_tensor, kernel_size=7, out_chan=64, is_training=is_training, stride=2)
+            tensor = self._conv(tensor=in_tensor, kernel_size=5, out_chan=64, is_training=is_training, stride=2)
             tensor = self._batch_normalization(tensor=tensor, is_training=is_training)
             tensor = self._leaky_relu(tensor=tensor)
             tensor = self._max_pool(tensor=tensor, pool=3, stride=2)
@@ -445,7 +445,7 @@ class ResNetLayers(BasicLayers):
                     tensor = self._conv(tensor=tensor, kernel_size=1, out_chan=2048, is_training=is_training, stride=1,
                                         name='conv2d-1')
                 tensor = tf.layers.average_pooling2d(tensor, pool_size=4, strides=1, data_format='channels_first',
-                                                     padding='valid', name='average_pool')
+                                                     padding='same', name='average_pool')
                 if not self.FULL_PREACTIVATION:
                     tensor = self._conv(tensor, kernel_size=1, out_chan=4096, is_training=is_training, stride=1,
                                         name='conv2d-2')
@@ -465,13 +465,20 @@ class ResNetLayers(BasicLayers):
                     tensor = self._upconv(tensor=tensor, kernel_size=3, out_chan=in_tensor.shape[1],
                                           is_training=is_training, stride=2, name='conv2d_t')
                 return tf.layers.average_pooling2d(tensor, pool_size=4, strides=1, data_format='channels_first',
-                                                   padding='valid', name='average_pool')
+                                                   padding='same', name='average_pool')
             else:
                 return tf.layers.average_pooling2d(tensor, pool_size=4, strides=1, data_format='channels_first',
-                                                   padding='valid', name='average_pool')
+                                                   padding='same', name='average_pool')
 
-    def prediction_layer(self, in_tensor, is_training, use_4k=False):
-
+    def prediction_layer(self, in_tensor, is_training, use_4k=False, alexnn=False):
+        """
+        A collection of different pre-packaged prediction layers for ResNets.
+        :param in_tensor: Tensor from which to predict results from.
+        :param is_training: Is this layer in training mode?
+        :param use_4k: Complete the especially wide layer approach on the last layer and apply one last conv-layer.
+        :param alexnn: Use a prediction layer similar to AlexNet.
+        :return: 21 predictions of (x, y) tuples for an arbitrary amount of batches.
+        """
         with tf.variable_scope('resnet_pred'):
             result = in_tensor
             if use_4k:
@@ -484,6 +491,15 @@ class ResNetLayers(BasicLayers):
                     result = self._conv(tensor=result, kernel_size=1, out_chan=BasicLayers.KEYPOINTS * 2,
                                         is_training=is_training, stride=1)
                 result = tf.reshape(result, (-1, 21, 2))
+            elif alexnn:
+                result = tf.contrib.layers.flatten(result)
+                result = self.fc_relu(result, 'fc_relu_2048-1', out_chan=2048, is_training=is_training)
+                result = self.fc_relu(result, 'fc_relu_2048-2', out_chan=2048, is_training=is_training)
+
+                result = self.fc_relu(result, 'fc_relu', out_chan=BasicLayers.KEYPOINTS * 2,
+                                      is_training=is_training,
+                                      disable_dropout=True)
+                return tf.reshape(result, (-1, 21, 2))
             else:
                 result = self.pred_layer(result, is_training)
             return result

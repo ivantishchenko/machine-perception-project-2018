@@ -22,7 +22,7 @@ FULL_PREACTIVATION = False
 USE_4K = False
 USE_UPCONVOLUTION = False
 RESNET_FEATURES = resnet_features
-RESNET_REPETITIONS = resnet_repetitions_normal
+RESNET_REPETITIONS = resnet_repetitions_experimental
 
 
 class ResNet(BaseModel):
@@ -46,11 +46,11 @@ class ResNet(BaseModel):
                                            first_layer=(j == 0), out_chan=RESNET_FEATURES[i],
                                            is_training=self.is_training)
 
-            image = resnet.last_layer(image, is_training=self.is_training, use_4k=USE_4K, use_upconv=USE_UPCONVOLUTION)
-            self.summary.histogram('last_layer', image)
+            #image = resnet.last_layer(image, is_training=self.is_training, use_4k=USE_4K, use_upconv=USE_UPCONVOLUTION)
+            #self.summary.histogram('last_layer', image)
 
         with tf.variable_scope('flatten'):
-            result = resnet.prediction_layer(image, is_training=self.is_training, use_4k=USE_4K)
+            result = resnet.prediction_layer(image, is_training=self.is_training, use_4k=USE_4K, alexnn=True)
 
         with tf.variable_scope('loss_calculation'):
             # Include all keypoints for metrics. These are rougher scores.
