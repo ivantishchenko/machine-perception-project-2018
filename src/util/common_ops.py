@@ -424,7 +424,7 @@ class ResNetLayers(BasicLayers):
             tensor = self._max_pool(tensor=tensor, pool=3, stride=2)
             return tensor
 
-    def last_layer(self, in_tensor, is_training, use_4k=False, use_upconv=False):
+    def last_layer(self, in_tensor, is_training, use_4k=False, use_upconv=False, tensor_other=None):
         """
         Default last layer for all residual networks.
         :param in_tensor: Tensor on which to apply this block on
@@ -457,15 +457,25 @@ class ResNetLayers(BasicLayers):
                 return self._dropout(tensor=tensor, is_training=is_training, name='dropout-2')
             elif use_upconv:
                 if not self.FULL_PREACTIVATION:
-                    tensor = self._upconv(tensor=tensor, kernel_size=3, out_chan=in_tensor.shape[1],
+                    tensor = self._upconv(tensor=tensor, kernel_size=3, out_chan=self.KEYPOINTS,
                                           is_training=is_training, stride=2, name='conv2d_t')
                 tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm')
                 tensor = self._leaky_relu(tensor=tensor, name='leaky_relu')
                 if self.FULL_PREACTIVATION:
-                    tensor = self._upconv(tensor=tensor, kernel_size=3, out_chan=in_tensor.shape[1],
+                    tensor = self._upconv(tensor=tensor, kernel_size=3, out_chan=self.KEYPOINTS,
                                           is_training=is_training, stride=2, name='conv2d_t')
-                return tf.layers.average_pooling2d(tensor, pool_size=4, strides=1, data_format='channels_first',
-                                                   padding='same', name='average_pool')
+                tensor2 = tensor_other
+                if tensor2 is not None:
+                    if not self.FULL_PREACTIVATION:
+                        tensor2 = self._conv(tensor=tensor2, kernel_size=1, out_chan=self.KEYPOINTS,
+                                             is_training=is_training, stride=1, name='conv2d')
+                    tensor2 = self._batch_normalization(tensor=tensor2, is_training=is_training, name='batch_norm2')
+                    tensor2 = self._leaky_relu(tensor=tensor2, name='leaky_relu2')
+                    if self.FULL_PREACTIVATION:
+                        tensor2 = self._conv(tensor=tensor, kernel_size=1, out_chan=self.KEYPOINTS,
+                                             is_training=is_training, stride=2, name='conv2d')
+                    return tf.add(tensor, tensor2)
+                return tensor
             else:
                 return tf.layers.average_pooling2d(tensor, pool_size=4, strides=1, data_format='channels_first',
                                                    padding='same', name='average_pool')
@@ -786,7 +796,7 @@ class ResNetLayers(BasicLayers):
                     def training():
                         dims = in_tensor.shape
                         return tf.cond(tf.greater_equal(survival_rate, threshold), lambda: branch(),
-                                       lambda: tf.zeros([dims[0], out_chan, dims[2], dims[2]]))
+                                       lambda: tf.zeros([dims[0], 4*out_chan, dims[2], dims[2]]))
 
                     def inference():
                         return tf.multiply(branch(), survival_rate)
@@ -875,7 +885,7 @@ class ResNetLayers(BasicLayers):
                     def training():
                         dims = in_tensor.shape
                         return tf.cond(tf.greater_equal(survival_rate, threshold), lambda: branch(),
-                                       lambda: tf.zeros([dims[0], out_chan, dims[2], dims[2]]))
+                                       lambda: tf.zeros([dims[0], 4*out_chan, dims[2], dims[2]]))
 
                     def inference():
                         return tf.multiply(branch(), survival_rate)
@@ -953,7 +963,7 @@ class ResNetLayers(BasicLayers):
                     def training():
                         dims = in_tensor.shape
                         return tf.cond(tf.greater_equal(survival_rate, threshold), lambda: branch(),
-                                       lambda: tf.zeros([dims[0], out_chan, dims[2], dims[2]]))
+                                       lambda: tf.zeros([dims[0], 4*out_chan, dims[2], dims[2]]))
 
                     def inference():
                         return tf.multiply(branch(), survival_rate)
@@ -1034,7 +1044,7 @@ class ResNetLayers(BasicLayers):
                     def training():
                         dims = in_tensor.shape
                         return tf.cond(tf.greater_equal(survival_rate, threshold), lambda: branch(),
-                                       lambda: tf.zeros([dims[0], out_chan, dims[2], dims[2]]))
+                                       lambda: tf.zeros([dims[0], 4*out_chan, dims[2], dims[2]]))
 
                     def inference():
                         return tf.multiply(branch(), survival_rate)
