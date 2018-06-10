@@ -9,4 +9,6 @@
 # __all__ = ('ExampleNet', 'VGG16', 'AlexNet', 'MnistNet', 'DenseNet')
 
 from .mvitnet import MvitNet
-__all__ = ('MvitNet')
+from .mvitnetV2 import MvitNetV2
+
+__all__ = ('MvitNet', 'MvitNetV2')

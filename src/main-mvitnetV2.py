@@ -33,15 +33,15 @@ if __name__ == '__main__':
 
         # Define model
         from datasources import HDF5Source
-        from models import MvitNet
-        model = MvitNet(
+        from models import MvitNetV2
+        model = MvitNetV2(
             # Note: The same session must be used for the model and the data sources.
             session,
 
             learning_schedule=[
                 {
                     'loss_terms_to_optimize': {
-                        'kp_loss_mse': ['resnet50', 'flatten', 'loss_calculation'],
+                        'kp_loss_mse': ['mvitNet', 'loss_calculation'],
                     },
                     'metrics': ['kp_loss_mse', 'kp_accuracy'],
                     'learning_rate': 1e-4,
