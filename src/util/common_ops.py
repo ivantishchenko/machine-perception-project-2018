@@ -33,7 +33,7 @@ class BasicLayers(object):
             self.summary.histogram(name + '/layer', layer)
         return layer
 
-    def _conv(self, tensor, kernel_size, out_chan, is_training, stride=1, dilation=1, name='conv2d'):
+    def _conv(self, tensor, kernel_size, out_chan, is_training, stride=1, dilation=1, padding='same', name='conv2d'):
         """
         Apply a convolutional layer to the input tensor.
         :param tensor: Tensor which to convolve
@@ -51,7 +51,7 @@ class BasicLayers(object):
                 filters=out_chan,
                 kernel_size=kernel_size,
                 strides=stride,
-                padding='same',
+                padding=padding,
                 data_format='channels_first',
                 dilation_rate=dilation,
                 activation=None,
@@ -69,6 +69,8 @@ class BasicLayers(object):
             )
 
         layer = __conv()
+        if isinstance(kernel_size, tuple):
+            return layer
         if self.visualize:
             # self.summary.filters(name, layer)
             # self.summary.feature_maps(name, layer)
@@ -80,7 +82,7 @@ class BasicLayers(object):
                 self.summary.histogram(name + '/bias', bias)
         return layer
 
-    def _upconv(self, tensor, kernel_size, out_chan, is_training, stride=1, name='conv2d_t'):
+    def _upconv(self, tensor, kernel_size, out_chan, is_training, stride=1, padding='same', name='conv2d_t'):
         """
         Apply a transpose-convolution layer to the input tensor.
         Note: Play around with the stride, then blowing it up, but not kernel sizes
@@ -98,7 +100,7 @@ class BasicLayers(object):
                 filters=out_chan,
                 kernel_size=kernel_size,
                 strides=stride,
-                padding='same',
+                padding=padding,
                 data_format='channels_first',
                 activation=None,
                 use_bias=True,
@@ -126,7 +128,7 @@ class BasicLayers(object):
                 self.summary.histogram(name + '/bias', bias)
         return layer
 
-    def _max_pool(self, tensor, pool=2, stride=2, name='max_pool'):
+    def _max_pool(self, tensor, pool=2, stride=2, padding='same', name='max_pool'):
         """
         Apply a max-pooling on the input tensor.
         :param tensor: Tensor on which to apply max-pooling on
@@ -139,7 +141,7 @@ class BasicLayers(object):
             inputs=tensor,
             pool_size=pool,
             strides=stride,
-            padding='same',
+            padding=padding,
             data_format='channels_first',
             name=name
         )
@@ -175,7 +177,7 @@ class BasicLayers(object):
                 gamma_regularizer=None,
                 beta_constraint=None,
                 gamma_constraint=None,
-                training=is_training,
+                training=True,
                 name=name,
                 reuse=None,
                 renorm=False,
@@ -197,7 +199,7 @@ class BasicLayers(object):
                 param_initializers=None,
                 param_regularizers=None,
                 updates_collections=None,  # tf.GraphKeys.UPDATE_OPS,
-                is_training=is_training,  # is_training would be more correct but validation performance is strange with it
+                is_training=True,  # is_training would be more correct but validation performance is strange with it
                 reuse=None,
                 variables_collections=None,
                 outputs_collections=None,
@@ -251,9 +253,6 @@ class BasicLayers(object):
             training=is_training,
             name=name
         )
-        print(name)
-        print('\n'.join(str(e) for e in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)))
-        print('==========')
         if self.visualize:
             # self.summary.feature_maps(name, layer)
             self.summary.histogram(name + '/layer', layer)
@@ -380,6 +379,141 @@ class BasicLayers(object):
             return tf.reshape(result, (-1, 21, 2))
 
 
+class InceptionResNetv2(BasicLayers):
+    """
+    A helper class to quickly generate different Inception/ResNet networks. The blocks can be made to use full
+    preactivation.
+    """
+    # http://torch.ch/blog/2016/02/04/resnets.html
+    MINIMAL_FEATURES = 64
+    FULL_PREACTIVATION = False
+
+    def __init__(self, summary, visualize=False, minimal_features=64, full_preactivation=False):
+        """
+        Default constructor.
+        :param summary: Summary object to allow logging.
+        :param visualize: Enable logging?
+        """
+        super().__init__(summary, visualize)
+        self.MINIMAL_FEATURES = minimal_features
+        self.FULL_PREACTIVATION = full_preactivation
+
+    def _cbr(self, in_tensor, kernel_size, out_chan, is_training=True, stride=1, padding='same', name=None):
+        """
+        Helper to generate quick convolutional layers with batch normalization/leaky relu with or without full
+        preactivation.
+        :return:
+        """
+        tensor = in_tensor
+        if not self.FULL_PREACTIVATION:
+            tensor = self._conv(tensor=tensor, kernel_size=kernel_size, out_chan=out_chan,
+                                is_training=is_training, stride=stride, padding=padding, name='conv2d_' + name)
+        tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='bn_' + name)
+        tensor = self._leaky_relu(tensor=tensor, name='lrelu_' + name)
+        if self.FULL_PREACTIVATION:
+            tensor = self._conv(tensor=tensor, kernel_size=kernel_size, out_chan=out_chan,
+                                is_training=is_training, stride=stride, name='conv2d_' + name)
+        return tensor
+
+    def stem(self, in_tensor, is_training):
+        with tf.variable_scope("Stem"):
+            tensor = in_tensor
+            tensor = self._cbr(tensor, kernel_size=3, out_chan=32, is_training=is_training, stride=2, padding='valid', name='0')
+            tensor = self._cbr(tensor, kernel_size=3, out_chan=32, is_training=is_training, padding='valid', name='1')
+            tensor = self._cbr(tensor, kernel_size=3, out_chan=64, is_training=is_training, name='2')
+            tensor1 = self._cbr(tensor, kernel_size=3, out_chan=96, is_training=is_training, stride=2, padding='valid', name='3a')
+            tensor2 = self._max_pool(tensor, pool=3, stride=2, padding='valid', name='3b')
+            tensor = tf.concat([tensor1, tensor2], axis=1)
+            tensor1 = self._cbr(tensor, kernel_size=1, out_chan=64, is_training=is_training, name='4a0')
+            tensor1 = self._cbr(tensor1, kernel_size=(5, 1), out_chan=64, is_training=is_training, name='4a1')
+            tensor1 = self._cbr(tensor1, kernel_size=(1, 5), out_chan=64, is_training=is_training, name='4a2')
+            tensor1 = self._cbr(tensor1, kernel_size=3, out_chan=96, is_training=is_training, padding='valid', name='4a3')
+            tensor2 = self._cbr(tensor, kernel_size=1, out_chan=64, is_training=is_training, name='4b0')
+            tensor2 = self._cbr(tensor2, kernel_size=3, out_chan=96, is_training=is_training, padding='valid', name='4b1')
+            tensor = tf.concat([tensor1, tensor2], axis=1)
+            # tensor1 = self._max_pool(tensor, pool=3, stride=2, padding='valid', name='5a')
+            tensor1 = self._cbr(tensor, kernel_size=(3, 1), out_chan=192, is_training=is_training, name='5a0')
+            tensor1 = self._cbr(tensor1, kernel_size=(3, 1), out_chan=192, is_training=is_training, name='5a1')
+            tensor2 = self._cbr(tensor, kernel_size=3, out_chan=192, is_training=is_training, name='5b0')
+            tensor = tf.concat([tensor1, tensor2], axis=1)
+            return tensor
+
+    def block16(self, in_tensor, is_training, name):
+        with tf.variable_scope("Inception-resnet-A" + name):
+            tensor = in_tensor
+            shortcut = in_tensor
+            tensor1 = self._cbr(tensor, kernel_size=1, out_chan=32, is_training=is_training, name='a0')
+            tensor1 = self._cbr(tensor1, kernel_size=3, out_chan=48, is_training=is_training, name='a1')
+            tensor1 = self._cbr(tensor1, kernel_size=3, out_chan=64, is_training=is_training, name='a2')
+            tensor2 = self._cbr(tensor, kernel_size=1, out_chan=32, is_training=is_training, name='b0')
+            tensor2 = self._cbr(tensor2, kernel_size=3, out_chan=32, is_training=is_training, name='b1')
+            tensor3 = self._cbr(tensor, kernel_size=1, out_chan=32, is_training=is_training, name='c0')
+            tensor = tf.concat([tensor1, tensor2, tensor3], axis=1)
+            tensor = self._conv(tensor, kernel_size=1, out_chan=384, is_training=is_training)
+            tensor = tf.multiply(tensor, 0.17)
+            tensor = tf.add(tensor, shortcut)
+            tensor = self._leaky_relu(tensor)
+            return tensor
+
+    def block7(self, in_tensor, is_training):
+        with tf.variable_scope("Reduction-A"):
+            tensor = in_tensor
+            tensor1 = self._cbr(tensor, kernel_size=1, out_chan=256, is_training=is_training, name='a0')
+            tensor1 = self._cbr(tensor1, kernel_size=3, out_chan=256, is_training=is_training, name='a1')
+            tensor1 = self._cbr(tensor1, kernel_size=3, out_chan=384, is_training=is_training, stride=2, padding='valid', name='a2')
+            tensor2 = self._cbr(tensor, kernel_size=3, out_chan=384, is_training=is_training, stride=2, padding='valid', name='b0')
+            tensor3 = self._max_pool(tensor, pool=3, stride=2, padding='valid', name='maxpool_c0')
+            tensor = tf.concat([tensor1, tensor2, tensor3], axis=1)
+            return tensor
+
+
+    def block17(self, in_tensor, is_training, name):
+        with tf.variable_scope("Inception-resnet-B" + name):
+            tensor = in_tensor
+            shortcut = in_tensor
+            tensor1 = self._cbr(tensor, kernel_size=1, out_chan=128, is_training=is_training, name='a0')
+            tensor1 = self._cbr(tensor1, kernel_size=(1, 3), out_chan=160, is_training=is_training, name='a1')
+            tensor1 = self._cbr(tensor1, kernel_size=(3, 1), out_chan=192, is_training=is_training, name='a2')
+            tensor2 = self._cbr(tensor, kernel_size=1, out_chan=192, is_training=is_training, name='b0')
+            tensor = tf.concat([tensor1, tensor2], axis=1)
+            tensor = self._conv(tensor, kernel_size=1, out_chan=in_tensor.shape[1], is_training=is_training)
+            tensor = tf.multiply(tensor, 0.1)
+            tensor = tf.add(tensor, shortcut)
+            tensor = self._leaky_relu(tensor)
+            return tensor
+
+
+    def block18(self, in_tensor, is_training):
+        with tf.variable_scope("Reduction-B"):
+            tensor = in_tensor
+            tensor1 = self._cbr(tensor, kernel_size=1, out_chan=256, is_training=is_training, name='a0')
+            tensor1 = self._cbr(tensor1, kernel_size=3, out_chan=288, is_training=is_training, name='a1')
+            tensor1 = self._cbr(tensor1, kernel_size=3, out_chan=320, is_training=is_training, stride=2, padding='valid', name='a2')
+            tensor2 = self._cbr(tensor, kernel_size=1, out_chan=256, is_training=is_training, name='b0')
+            tensor2 = self._cbr(tensor2, kernel_size=3, out_chan=288, is_training=is_training, stride=2, padding='valid', name='b1')
+            tensor3 = self._cbr(tensor, kernel_size=1, out_chan=256, is_training=is_training, name='c0')
+            tensor3 = self._cbr(tensor3, kernel_size=3, out_chan=384, is_training=is_training, stride=2, padding='valid', name='c1')
+            tensor4 = self._max_pool(tensor, pool=3, stride=2, padding='valid', name='d0')
+            tensor = tf.concat([tensor1, tensor2, tensor3, tensor4], axis=1)
+            return tensor
+
+
+    def block19(self, in_tensor, is_training, name):
+        with tf.variable_scope("Inception-resnet-C" + name):
+            tensor = in_tensor
+            shortcut = in_tensor
+            tensor1 = self._cbr(tensor, kernel_size=1, out_chan=192, is_training=is_training, name='a0')
+            tensor1 = self._cbr(tensor1, kernel_size=(1, 3), out_chan=224, is_training=is_training, name='a1')
+            tensor1 = self._cbr(tensor1, kernel_size=(3, 1), out_chan=256, is_training=is_training, name='a2')
+            tensor2 = self._cbr(tensor, kernel_size=1, out_chan=192, is_training=is_training, name='b0')
+            tensor = tf.concat([tensor1, tensor2], axis=1)
+            tensor = self._conv(tensor, kernel_size=1, out_chan=in_tensor.shape[1], is_training=is_training)
+            tensor = tf.multiply(tensor, 0.2)
+            tensor = tf.add(tensor, shortcut)
+            tensor = self._leaky_relu(tensor)
+            return tensor
+
+
 class ResNetLayers(BasicLayers):
     """
     A helper class to quickly generate different residual networks. The blocks follow the full pre-activation principle.
@@ -410,6 +544,41 @@ class ResNetLayers(BasicLayers):
         """
         return 1 - (depth[0] / depth[1]) * (1 - survival_last_block)
 
+    def _cbr(self, in_tensor, kernel_size, out_chan, is_training=True, stride=1, padding='same', dilation=1, name=None):
+        """
+        Helper to generate quick convolutional layers with batch normalization/leaky relu with or without full
+        preactivation.
+        :return:
+        """
+        tensor = in_tensor
+        if not self.FULL_PREACTIVATION:
+            tensor = self._conv(tensor=tensor, kernel_size=kernel_size, out_chan=out_chan,
+                                is_training=is_training, stride=stride, padding=padding, dilation=dilation,
+                                name='conv2d-' + name)
+        tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm-' + name)
+        tensor = self._leaky_relu(tensor=tensor, name='leaky_relu-' + name)
+        if self.FULL_PREACTIVATION:
+            tensor = self._conv(tensor=tensor, kernel_size=kernel_size, out_chan=out_chan,
+                                is_training=is_training, stride=stride, name='conv2d-' + name)
+        return tensor
+
+    def _tcbr(self, in_tensor, kernel_size, out_chan, is_training=True, stride=1, padding='same', name=None):
+        """
+        Helper to generate quick convolutional layers with batch normalization/leaky relu with or without full
+        preactivation.
+        :return:
+        """
+        tensor = in_tensor
+        if not self.FULL_PREACTIVATION:
+            tensor = self._upconv(tensor=tensor, kernel_size=kernel_size, out_chan=out_chan,
+                                  is_training=is_training, stride=stride, padding=padding, name='conv2d_t-' + name)
+        tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm-' + name)
+        tensor = self._leaky_relu(tensor=tensor, name='leaky_relu-' + name)
+        if self.FULL_PREACTIVATION:
+            tensor = self._upconv(tensor=tensor, kernel_size=kernel_size, out_chan=out_chan,
+                                  is_training=is_training, stride=stride, name='conv2d_t-' + name)
+        return tensor
+
     def init_block(self, in_tensor, is_training):
         """
         Default initial layer for all residual networks.
@@ -436,6 +605,7 @@ class ResNetLayers(BasicLayers):
         with tf.variable_scope('resnet_last'):
             tensor = in_tensor
             if use_4k:
+                # tensor = self._cbr(tensor, kernel_size=1, out_chan=2048, is_training=is_training, stride=1, name='0')
                 if not self.FULL_PREACTIVATION:
                     tensor = self._conv(tensor=tensor, kernel_size=1, out_chan=2048, is_training=is_training, stride=1,
                                         name='conv2d-1')
@@ -446,6 +616,7 @@ class ResNetLayers(BasicLayers):
                                         name='conv2d-1')
                 tensor = tf.layers.average_pooling2d(tensor, pool_size=4, strides=1, data_format='channels_first',
                                                      padding='same', name='average_pool')
+                # tensor = self._cbr(tensor, kernel_size=1, out_chan=4096, is_training=is_training, stride=1, name='1')
                 if not self.FULL_PREACTIVATION:
                     tensor = self._conv(tensor, kernel_size=1, out_chan=4096, is_training=is_training, stride=1,
                                         name='conv2d-2')
@@ -456,16 +627,20 @@ class ResNetLayers(BasicLayers):
                                         name='conv2d-2')
                 return self._dropout(tensor=tensor, is_training=is_training, name='dropout-2')
             elif use_upconv:
-                if not self.FULL_PREACTIVATION:
-                    tensor = self._upconv(tensor=tensor, kernel_size=3, out_chan=self.KEYPOINTS,
-                                          is_training=is_training, stride=2, name='conv2d_t')
-                tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm')
-                tensor = self._leaky_relu(tensor=tensor, name='leaky_relu')
-                if self.FULL_PREACTIVATION:
-                    tensor = self._upconv(tensor=tensor, kernel_size=3, out_chan=self.KEYPOINTS,
-                                          is_training=is_training, stride=2, name='conv2d_t')
+                tensor = self._tcbr(tensor, kernel_size=3, out_chan=self.KEYPOINTS, is_training=is_training, stride=2,
+                                    name='0')
+                # if not self.FULL_PREACTIVATION:
+                #     tensor = self._upconv(tensor=tensor, kernel_size=3, out_chan=self.KEYPOINTS,
+                #                           is_training=is_training, stride=2, name='conv2d_t')
+                # tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm')
+                # tensor = self._leaky_relu(tensor=tensor, name='leaky_relu')
+                # if self.FULL_PREACTIVATION:
+                #     tensor = self._upconv(tensor=tensor, kernel_size=3, out_chan=self.KEYPOINTS,
+                #                           is_training=is_training, stride=2, name='conv2d_t')
                 tensor2 = tensor_other
                 if tensor2 is not None:
+                    # tensor2 = self._cbr(tensor2, kernel_size=1, out_chan=self.KEYPOINTS, is_training=is_training,
+                    #                     stride=1, name='0')
                     if not self.FULL_PREACTIVATION:
                         tensor2 = self._conv(tensor=tensor2, kernel_size=1, out_chan=self.KEYPOINTS,
                                              is_training=is_training, stride=1, name='conv2d')
@@ -480,18 +655,20 @@ class ResNetLayers(BasicLayers):
                 return tf.layers.average_pooling2d(tensor, pool_size=4, strides=1, data_format='channels_first',
                                                    padding='same', name='average_pool')
 
-    def prediction_layer(self, in_tensor, is_training, use_4k=False, alexnn=False):
+    def prediction_layer(self, in_tensor, is_training, use_4k=False, fcnn=False):
         """
         A collection of different pre-packaged prediction layers for ResNets.
         :param in_tensor: Tensor from which to predict results from.
         :param is_training: Is this layer in training mode?
         :param use_4k: Complete the especially wide layer approach on the last layer and apply one last conv-layer.
-        :param alexnn: Use a prediction layer similar to AlexNet.
+        :param fcnn: Use a prediction layer similar to AlexNet.
         :return: 21 predictions of (x, y) tuples for an arbitrary amount of batches.
         """
         with tf.variable_scope('resnet_pred'):
             result = in_tensor
             if use_4k:
+                # result = self._cbr(result, kernel_size=1, out_chan=self.KEYPOINTS * 2, is_training=is_training,
+                #                    stride=1, name='0')
                 if not self.FULL_PREACTIVATION:
                     result = self._conv(tensor=result, kernel_size=1, out_chan=BasicLayers.KEYPOINTS * 2,
                                         is_training=is_training, stride=1)
@@ -501,10 +678,10 @@ class ResNetLayers(BasicLayers):
                     result = self._conv(tensor=result, kernel_size=1, out_chan=BasicLayers.KEYPOINTS * 2,
                                         is_training=is_training, stride=1)
                 result = tf.reshape(result, (-1, 21, 2))
-            elif alexnn:
+            elif fcnn:
                 result = tf.contrib.layers.flatten(result)
-                result = self.fc_relu(result, 'fc_relu_2048-1', out_chan=2048, is_training=is_training)
-                result = self.fc_relu(result, 'fc_relu_2048-2', out_chan=2048, is_training=is_training)
+                result = self.fc_relu(result, 'fc_relu_4096-1', out_chan=4096, is_training=is_training)
+                result = self.fc_relu(result, 'fc_relu_4096-2', out_chan=4096, is_training=is_training)
 
                 result = self.fc_relu(result, 'fc_relu', out_chan=BasicLayers.KEYPOINTS * 2,
                                       is_training=is_training,
@@ -525,6 +702,10 @@ class ResNetLayers(BasicLayers):
         :return: Application of a default residual building block branch on the input
         """
         tensor = in_tensor
+        # tensor = self._cbr(tensor, kernel_size=3, out_chan=out_chan, is_training=is_training, stride=strides,
+        #                    dilation=dilation, name='0')
+        # tensor = self._cbr(tensor, kernel_size=3, out_chan=out_chan, is_training=is_training, stride=1,
+        #                    dilation=dilation, name='1')
         if not self.FULL_PREACTIVATION:
             tensor = self._conv(tensor=tensor, kernel_size=3, out_chan=out_chan, is_training=is_training, stride=strides,
                             dilation=dilation, name='conv2d-1')
@@ -557,6 +738,10 @@ class ResNetLayers(BasicLayers):
         :return: Application of a bottleneck residual building block branch on the input
         """
         tensor = in_tensor
+        # tensor = self._cbr(tensor, kernel_size=1, out_chan=out_chan, is_training=is_training, stride=strides, name='0')
+        # tensor = self._cbr(tensor, kernel_size=3, out_chan=out_chan, is_training=is_training, stride=1,
+        #                    dilation=dilation, name='1')
+        # tensor = self._cbr(tensor, kernel_size=1, out_chan=4*out_chan, is_training=is_training, stride=1, name='2')
         if not self.FULL_PREACTIVATION:
             tensor = self._conv(tensor=tensor, kernel_size=1, out_chan=out_chan, stride=strides,
                                 is_training=is_training, name='conv2d-1')
@@ -599,6 +784,14 @@ class ResNetLayers(BasicLayers):
         :return: Application of an InceptionNet based approach to a normal residual building block branch on the input
         """
         tensor = in_tensor
+        # tensor = self._cbr(tensor, kernel_size=(1, 3), out_chan=out_chan, is_training=is_training, stride=(1, strides),
+        #                    dilation=(1, dilation), name='0')
+        # tensor = self._cbr(tensor, kernel_size=(3, 1), out_chan=out_chan, is_training=is_training, stride=(strides, 1),
+        #                    dilation=(dilation, 1), name='1')
+        # tensor = self._cbr(tensor, kernel_size=(1, 3), out_chan=out_chan, is_training=is_training, stride=1,
+        #                    dilation=(1, dilation), name='2')
+        # tensor = self._cbr(tensor, kernel_size=(3, 1), out_chan=out_chan, is_training=is_training, stride=1,
+        #                    dilation=(dilation, 1), name='3')
         if not self.FULL_PREACTIVATION:
             tensor = self._conv(tensor=tensor, kernel_size=(1, 3), out_chan=out_chan, is_training=is_training,
                                 stride=(1, strides), dilation=(1, dilation), name='conv2d-1')
@@ -651,6 +844,12 @@ class ResNetLayers(BasicLayers):
                  input
         """
         tensor = in_tensor
+        # tensor = self._cbr(tensor, kernel_size=1, out_chan=out_chan, is_training=is_training, stride=strides, name='0')
+        # tensor = self._cbr(tensor, kernel_size=(1, 3), out_chan=out_chan, is_training=is_training, stride=1,
+        #                    dilation=(1, dilation), name='1')
+        # tensor = self._cbr(tensor, kernel_size=(3, 1), out_chan=out_chan, is_training=is_training, stride=1,
+        #                    dilation=(dilation, 1), name='2')
+        # tensor = self._cbr(tensor, kernel_size=1, out_chan=4*out_chan, is_training=is_training, stride=1, name='3')
         if not self.FULL_PREACTIVATION:
             tensor = self._conv(tensor=tensor, kernel_size=1, out_chan=out_chan, is_training=is_training,
                                 stride=strides, name='conv2d-1')

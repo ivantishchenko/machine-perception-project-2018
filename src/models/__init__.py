@@ -15,4 +15,5 @@ from .ivan import NewModel
 from .cpm import Glover
 from .trivialnet import TrivialNet
 from .dressnet import ResNet
-__all__ = ('ExampleNet', 'NewModel', 'Glover', 'TrivialNet', 'ResNet')
+from .inceptionresnet import IncResNet
+__all__ = ('ExampleNet', 'NewModel', 'Glover', 'TrivialNet', 'ResNet', 'IncResNet')
