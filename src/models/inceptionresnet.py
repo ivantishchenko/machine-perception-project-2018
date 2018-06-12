@@ -68,7 +68,7 @@ class IncResNet(BaseModel):
 
             with tf.variable_scope('last_layer'):
                 image = tf.layers.average_pooling2d(image, pool_size=6, strides=1, data_format='channels_first',
-                                                   padding='valid', name='average_pool')
+                                                   padding='same', name='average_pool')
                 self.summary.histogram('last_layer', image)
 
         with tf.variable_scope('flatten'):

@@ -27,7 +27,8 @@ class BasicLayers(object):
         :return: Application of leaky-relu on the layer
 
         """
-        layer = tf.nn.leaky_relu(tensor, self.SLOPE_LRU, name=name)
+        layer = tf.nn.relu(tensor, name=name)
+        # layer = tf.nn.leaky_relu(tensor, self.SLOPE_LRU, name=name)
         if self.visualize:
             # self.summary.feature_maps(name, layer)
             self.summary.histogram(name + '/layer', layer)

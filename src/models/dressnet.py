@@ -20,9 +20,10 @@ CROPSIZE = 128
 ACCURACY_DISTANCE = 2
 FULL_PREACTIVATION = False
 USE_4K = False
-USE_UPCONVOLUTION = True
+USE_UPCONVOLUTION = False
+FCNN = False
 RESNET_FEATURES = resnet_features
-RESNET_REPETITIONS = resnet_repetitions_large
+RESNET_REPETITIONS = resnet_repetitions_normal
 RESNET_IDENTITY_LAYERS = np.sum(RESNET_REPETITIONS) - 4
 
 
@@ -35,7 +36,7 @@ class ResNet(BaseModel):
         rgb_image = input_tensors['img']
         keypoints = input_tensors['kp_2D']
         is_visible = input_tensors['vis_2D']
-        resnet = rnl(self.summary, visualize=False,
+        resnet = rnl(self.summary, visualize=True,
                      minimal_features=RESNET_FEATURES[0], full_preactivation=FULL_PREACTIVATION)
         image = rgb_image
 
@@ -44,27 +45,27 @@ class ResNet(BaseModel):
             depth_count = 0
             for i, layers in enumerate(RESNET_REPETITIONS):
                 for j in range(layers):
-                    if j != 0:
-                        depth_count = depth_count + 1
-                    if i == 2 and j == 0:
-                        image_snapshot = image
-                    if layers == RESNET_REPETITIONS[-1]:
-                        image = resnet.bottleneck_dilation(image, layer_name='conv%d_%d' % (i + 2, j + 1),
-                                                           first_layer=(j == 0), out_chan=RESNET_FEATURES[i],
-                                                           is_training=self.is_training,
-                                                           depth=(depth_count, RESNET_IDENTITY_LAYERS))
-                    else:
-                        image = resnet.bottleneck(image, layer_name='conv%d_%d' % (i + 2, j + 1),
-                                                  first_layer=(j == 0), out_chan=RESNET_FEATURES[i],
-                                                  is_training=self.is_training,
-                                                  depth=(depth_count, RESNET_IDENTITY_LAYERS))
+                    # if j != 0:
+                    #     depth_count = depth_count + 1
+                    # if i == 2 and j == 0:
+                    #     image_snapshot = image
+                    # if layers == RESNET_REPETITIONS[-1]:
+                    #     image = resnet.bottleneck_dilation(image, layer_name='conv%d_%d' % (i + 2, j + 1),
+                    #                                        first_layer=(j == 0), out_chan=RESNET_FEATURES[i],
+                    #                                        is_training=self.is_training,
+                    #                                        depth=(depth_count, RESNET_IDENTITY_LAYERS))
+                    # else:
+                    image = resnet.vanilla(image, layer_name='conv%d_%d' % (i + 2, j + 1),
+                                           first_layer=(j == 0), out_chan=RESNET_FEATURES[i],
+                                           is_training=self.is_training)
+                                           #depth=(depth_count, RESNET_IDENTITY_LAYERS))
 
-            image = resnet.last_layer(image, is_training=self.is_training, use_4k=USE_4K, use_upconv=USE_UPCONVOLUTION, tensor_other=image_snapshot)
-            image = resnet.last_layer(image, is_training=self.is_training)
+            # image = resnet._max_pool(image, pool=(4, 4))
+            # image = resnet.last_layer(image, is_training=self.is_training, use_4k=USE_4K, use_upconv=USE_UPCONVOLUTION)
             self.summary.histogram('last_layer', image)
 
         with tf.variable_scope('flatten'):
-            result = resnet.prediction_layer(image, is_training=self.is_training, use_4k=USE_4K, alexnn=False)
+            result = resnet.prediction_layer(image, is_training=self.is_training, use_4k=USE_4K, fcnn=FCNN)
 
         with tf.variable_scope('loss_calculation'):
             # Include all keypoints for metrics. These are rougher scores.
