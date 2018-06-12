@@ -1282,12 +1282,13 @@ class ImageOps(object):
     @classmethod
     def get_single_heatmap(cls, hand_joints, heatmap_size, gaussian_variance, scale_factor, normalized=False):
         gt_heatmap_np = []
-        # invert_heatmap_np = tf.ones(shape=(heatmap_size, heatmap_size))  # See comment below
+        invert_heatmap_np = tf.ones(shape=(heatmap_size, heatmap_size))  # See comment below
         for j in range(hand_joints.shape[0]):
             cur_joint_heatmap = cls.make_gaussian(heatmap_size,
                                                   gaussian_variance,
                                                   centre=(hand_joints[j] // scale_factor),
                                                   normalized=normalized)
             gt_heatmap_np.append(cur_joint_heatmap)
-            # invert_heatmap_np -= cur_joint_heatmap  # Maybe we should include that but I don't see why; background?
+            invert_heatmap_np -= cur_joint_heatmap  # Maybe we should include that but I don't see why; background?
+        gt_heatmap_np.append(invert_heatmap_np)
         return gt_heatmap_np, 0
