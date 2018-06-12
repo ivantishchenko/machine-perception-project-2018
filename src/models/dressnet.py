@@ -61,7 +61,7 @@ class ResNet(BaseModel):
                                            #depth=(depth_count, RESNET_IDENTITY_LAYERS))
 
             # image = resnet._max_pool(image, pool=(4, 4))
-            # image = resnet.last_layer(image, is_training=self.is_training, use_4k=USE_4K, use_upconv=USE_UPCONVOLUTION)
+            image = resnet.last_layer(image, is_training=self.is_training, use_4k=USE_4K, use_upconv=USE_UPCONVOLUTION)
             self.summary.histogram('last_layer', image)
 
         with tf.variable_scope('flatten'):

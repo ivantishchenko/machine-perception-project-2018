@@ -654,7 +654,7 @@ class ResNetLayers(BasicLayers):
                 return tensor
             else:
                 return tf.layers.average_pooling2d(tensor, pool_size=4, strides=1, data_format='channels_first',
-                                                   padding='same', name='average_pool')
+                                                   padding='valid', name='average_pool')
 
     def prediction_layer(self, in_tensor, is_training, use_4k=False, fcnn=False):
         """

@@ -6,7 +6,7 @@ import tensorflow as tf
 
 # HYPER PARAMETER TUNINGS HERE
 BATCHSIZE = 8
-EPOCHS = 55
+EPOCHS = 45
 
 if __name__ == '__main__':
 
