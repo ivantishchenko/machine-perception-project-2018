@@ -594,7 +594,7 @@ class ResNetLayers(BasicLayers):
             tensor = self._max_pool(tensor=tensor, pool=3, stride=2)
             return tensor
 
-    def last_layer(self, in_tensor, is_training, use_4k=False, use_upconv=False, tensor_other=None):
+    def last_layer(self, in_tensor, is_training, use_4k=False, use_upconv=False, tensor_other=None, padding='same'):
         """
         Default last layer for all residual networks.
         :param in_tensor: Tensor on which to apply this block on
@@ -616,7 +616,7 @@ class ResNetLayers(BasicLayers):
                     tensor = self._conv(tensor=tensor, kernel_size=1, out_chan=2048, is_training=is_training, stride=1,
                                         name='conv2d-1')
                 tensor = tf.layers.average_pooling2d(tensor, pool_size=4, strides=1, data_format='channels_first',
-                                                     padding='same', name='average_pool')
+                                                     padding=padding, name='average_pool')
                 # tensor = self._cbr(tensor, kernel_size=1, out_chan=4096, is_training=is_training, stride=1, name='1')
                 if not self.FULL_PREACTIVATION:
                     tensor = self._conv(tensor, kernel_size=1, out_chan=4096, is_training=is_training, stride=1,
@@ -628,16 +628,16 @@ class ResNetLayers(BasicLayers):
                                         name='conv2d-2')
                 return self._dropout(tensor=tensor, is_training=is_training, name='dropout-2')
             elif use_upconv:
-                tensor = self._tcbr(tensor, kernel_size=3, out_chan=self.KEYPOINTS, is_training=is_training, stride=2,
-                                    name='0')
-                # if not self.FULL_PREACTIVATION:
-                #     tensor = self._upconv(tensor=tensor, kernel_size=3, out_chan=self.KEYPOINTS,
-                #                           is_training=is_training, stride=2, name='conv2d_t')
-                # tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm')
-                # tensor = self._leaky_relu(tensor=tensor, name='leaky_relu')
-                # if self.FULL_PREACTIVATION:
-                #     tensor = self._upconv(tensor=tensor, kernel_size=3, out_chan=self.KEYPOINTS,
-                #                           is_training=is_training, stride=2, name='conv2d_t')
+                # tensor = self._tcbr(tensor, kernel_size=3, out_chan=self.KEYPOINTS, is_training=is_training, stride=2,
+                #                     name='0')
+                if not self.FULL_PREACTIVATION:
+                    tensor = self._upconv(tensor=tensor, kernel_size=3, out_chan=self.KEYPOINTS,
+                                          is_training=is_training, stride=2, name='conv2d_t')
+                tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm')
+                tensor = self._leaky_relu(tensor=tensor, name='leaky_relu')
+                if self.FULL_PREACTIVATION:
+                    tensor = self._upconv(tensor=tensor, kernel_size=3, out_chan=self.KEYPOINTS,
+                                          is_training=is_training, stride=2, name='conv2d_t')
                 tensor2 = tensor_other
                 if tensor2 is not None:
                     # tensor2 = self._cbr(tensor2, kernel_size=1, out_chan=self.KEYPOINTS, is_training=is_training,
@@ -654,7 +654,7 @@ class ResNetLayers(BasicLayers):
                 return tensor
             else:
                 return tf.layers.average_pooling2d(tensor, pool_size=4, strides=1, data_format='channels_first',
-                                                   padding='valid', name='average_pool')
+                                                   padding=padding, name='average_pool')
 
     def prediction_layer(self, in_tensor, is_training, use_4k=False, fcnn=False):
         """

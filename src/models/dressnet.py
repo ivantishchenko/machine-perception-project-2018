@@ -55,13 +55,13 @@ class ResNet(BaseModel):
                     #                                        is_training=self.is_training,
                     #                                        depth=(depth_count, RESNET_IDENTITY_LAYERS))
                     # else:
-                    image = resnet.vanilla(image, layer_name='conv%d_%d' % (i + 2, j + 1),
-                                           first_layer=(j == 0), out_chan=RESNET_FEATURES[i],
-                                           is_training=self.is_training)
-                                           #depth=(depth_count, RESNET_IDENTITY_LAYERS))
+                    image = resnet.bottleneck(image, layer_name='conv%d_%d' % (i + 2, j + 1),
+                                              first_layer=(j == 0), out_chan=RESNET_FEATURES[i],
+                                              is_training=self.is_training)
+                                              #depth=(depth_count, RESNET_IDENTITY_LAYERS))
 
             # image = resnet._max_pool(image, pool=(4, 4))
-            image = resnet.last_layer(image, is_training=self.is_training, use_4k=USE_4K, use_upconv=USE_UPCONVOLUTION)
+            # image = resnet.last_layer(image, is_training=self.is_training, use_4k=USE_4K, use_upconv=USE_UPCONVOLUTION)
             self.summary.histogram('last_layer', image)
 
         with tf.variable_scope('flatten'):
