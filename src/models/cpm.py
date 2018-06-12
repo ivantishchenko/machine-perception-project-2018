@@ -160,4 +160,4 @@ class Glover(BaseModel):
         }
 
         # Return output_tensor, loss_tensor and metrics (not used)
-        return {'kp_2D': result}, loss_terms_flattened, {}
+        return {'kp_2D': result[:, :-1, :]}, loss_terms_flattened, {}
