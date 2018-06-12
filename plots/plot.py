@@ -34,10 +34,8 @@ def plot_loss(in_files, out_file, names, colors, smooth_val):
         limits_x.append(max(steps))
         # limits_y.append(max(values))
         if smooth_val[i] != -1:
-            smooth_val = smooth(values, smooth_val[i])
-        else:
-            smooth_val = values
-        plt.plot(steps, smooth_val, color=colors[i], alpha=0.8, label=names[i])
+            values = smooth(values, smooth_val[i])
+        plt.plot(steps, values, color=colors[i], alpha=0.8, label=names[i])
 
     plt.ylim(ymin=0)
     # plt.ylim(ymax=max(limits_y))
@@ -47,7 +45,7 @@ def plot_loss(in_files, out_file, names, colors, smooth_val):
     plt.grid(linestyle='dashed')
     plt.xlabel('Batch')
     plt.ylabel('Loss')
-    # plt.legend()
+    plt.legend()
     plt.savefig(out_file)
 
 '''
@@ -63,10 +61,8 @@ def plot_acc(in_files, out_file, names, colors, smooth_val):
         # limits_y.append(max(values))
 
         if smooth_val[i] != -1:
-            smooth_val = smooth(values, smooth_val[i])
-        else:
-            smooth_val = values
-        plt.plot(steps, smooth_val, color=colors[i], alpha=0.8)
+            values = smooth(values, smooth_val[i])
+        plt.plot(steps, values, color=colors[i], alpha=0.8)
 
     plt.ylim(ymin=0)
     # plt.ylim(ymax=max(limits_y))
@@ -76,7 +72,7 @@ def plot_acc(in_files, out_file, names, colors, smooth_val):
     plt.grid(linestyle='dashed')
     plt.xlabel('Batch')
     plt.ylabel('Accuracy')
-    # plt.legend(names)
+    plt.legend(names)
     plt.savefig(out_file)
     plt.gcf().clear()
 
@@ -105,3 +101,16 @@ plot_acc([DATA_DIR + "test_acc.csv"],
          ["MvitNet"],
          ['b'],
          [-1])
+
+
+plot_loss([DATA_DIR + "train_loss.csv", DATA_DIR + "test_loss.csv"],
+          OUT_DIR + 'all_loss.png',
+          ["Training set", "Validation set"],
+          ['b', 'r'],
+          [9, -1])
+
+plot_acc([DATA_DIR + "train_acc.csv", DATA_DIR + "test_acc.csv"],
+         OUT_DIR + 'all_acc.png',
+         ["Training set", "Validation set"],
+         ['b', 'r'],
+         [9, -1])
