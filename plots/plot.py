@@ -5,7 +5,7 @@ import matplotlib.ticker as mtick
 
 
 DATA_DIR = 'data/'
-OUT_DIR = 'out/'
+OUT_DIR = 'ing/'
 
 def extract_data(file_path):
     with open(file_path) as csvfile:
