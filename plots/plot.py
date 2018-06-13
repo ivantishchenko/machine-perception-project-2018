@@ -22,13 +22,12 @@ def _smooth(y, box_pts):
     y_smooth = np.convolve(y, box, mode='same')
     return y_smooth
 
-
 '''
 Plot different models loss on the same graph
 '''
 
 
-def plot_loss(in_files, out_file, names, colors, smooth_val, limits):
+def plot_loss(in_files, out_file, names, colors, smooth_val, limits, dims=(640, 480)):
     num_models = len(in_files)
     limits_x = []
     limits_y = []
@@ -57,6 +56,12 @@ def plot_loss(in_files, out_file, names, colors, smooth_val, limits):
     plt.ylabel('Loss')
     if len(names) > 1:
         plt.legend(names)
+
+    # set dims
+    fig = plt.gcf()
+    DPI = fig.get_dpi()
+    fig.set_size_inches(dims[0] / float(DPI), dims[1] / float(DPI))
+
     plt.savefig(out_file)
     plt.gcf().clear()
 
@@ -66,7 +71,7 @@ Plot different models acc on the same graph
 '''
 
 
-def plot_acc(in_files, out_file, names, colors, smooth_val, limits):
+def plot_acc(in_files, out_file, names, colors, smooth_val, limits, dims=(640, 480)):
     num_models = len(in_files)
     limits_x = []
     limits_y = []
@@ -96,6 +101,12 @@ def plot_acc(in_files, out_file, names, colors, smooth_val, limits):
     plt.ylabel('Accuracy')
     if len(names) > 1:
         plt.legend(names)
+
+    # set dims
+    fig = plt.gcf()
+    DPI = fig.get_dpi()
+    fig.set_size_inches(dims[0] / float(DPI), dims[1] / float(DPI))
+
     plt.savefig(out_file)
     plt.gcf().clear()
 
@@ -137,11 +148,13 @@ plot_loss([DATA_DIR + "train_loss.csv", DATA_DIR + "test_loss.csv"],
           ["Training set", "Validation set"],
           ['b', 'r'],
           [9, -1],
-          [-1, 500])
+          [-1, 500],
+          (640, 400))
 
 plot_acc([DATA_DIR + "train_acc.csv", DATA_DIR + "test_acc.csv"],
          OUT_DIR + 'all_acc.png',
          ["Training set", "Validation set"],
          ['b', 'r'],
          [9, -1],
-         [-1, 0.31])
+         [-1, 0.31],
+         (640, 400))
