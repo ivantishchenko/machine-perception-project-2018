@@ -176,7 +176,7 @@ smooth_var = 10
 
 plot_loss([DATA_DIR + "incres_train_loss.csv", DATA_DIR + "incres_test_loss.csv"],
           OUT_DIR + 'incres_all_loss.png',
-          ["Training", "Testing"],
+          ["Training", "Validation"],
           ['b', 'r'],
           [smooth_var, -1],
           [-1, 350],
@@ -184,7 +184,7 @@ plot_loss([DATA_DIR + "incres_train_loss.csv", DATA_DIR + "incres_test_loss.csv"
 
 plot_acc([DATA_DIR + "incres_train_acc.csv", DATA_DIR + "incres_test_acc.csv"],
          OUT_DIR + 'incres_all_acc.png',
-         ["Training", "Testing"],
+         ["Training", "Validation"],
          ['b', 'r'],
          [smooth_var, -1],
          [-1, 0.45],
