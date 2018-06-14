@@ -10,20 +10,19 @@ ACCURACY_DISTANCE = 2
 class InceptionNet(BaseModel):
 
     def conv2d_bn(self, x, filters, num_row, num_col, padding='same', strides=(1, 1), name=None):
-        """Utility function to apply conv + BN.
-        Arguments:
-            x: input tensor.
-            filters: filters in `Conv2D`.
-            num_row: height of the convolution kernel.
-            num_col: width of the convolution kernel.
-            padding: padding mode in `Conv2D`.
-            strides: strides in `Conv2D`.
-            name: name of the ops; will become `name + '_conv'`
-                for the convolution and `name + '_bn'` for the
-                batch norm layer.
-        Returns:
-            Output tensor after applying `Conv2D` and `BatchNormalization`.
-        """
+
+        '''
+        Basic building block for inception
+        :param x: input
+        :param filters: num filters
+        :param num_row: num rows
+        :param num_col:  num cols
+        :param padding:  padding
+        :param strides:  strides
+        :param name:  block's name
+        :return: the tensor after doing a basic block
+        '''
+
         if name is not None:
             bn_name = name + '_bn'
             conv_name = name + '_conv'

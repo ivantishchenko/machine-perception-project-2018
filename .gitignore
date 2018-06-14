@@ -1,3 +1,5 @@
+plots/sub/*.csv
+
 # Datasets folder
 datasets/*
 
