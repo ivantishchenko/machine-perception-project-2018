@@ -17,6 +17,28 @@ def _extract_data(file_path):
     return steps, values
 
 
+def _smooth_i(x,window_len=11,window='hanning'):
+    x = np.array(x)
+    if x.ndim != 1:
+        raise ValueError("smooth only accepts 1 dimension arrays.")
+    if x.size < window_len:
+        raise ValueError("Input vector needs to be bigger than window size.")
+    if window_len<3:
+        return x
+    if not window in ['flat', 'hanning', 'hamming', 'bartlett', 'blackman']:
+        raise ValueError("Window is on of 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'")
+
+    s=np.r_[x[window_len-1:0:-1],x,x[-1:-window_len:-1]]
+
+    if window == 'flat': #moving average
+        w=np.ones(window_len,'d')
+    else:
+        w=eval('np.'+window+'(window_len)')
+
+    y=np.convolve(w/w.sum(),s,mode='valid')
+    return y
+
+
 def _smooth(y, box_pts):
     box = np.ones(box_pts) / box_pts
     y_smooth = np.convolve(y, box, mode='same')
@@ -37,8 +59,8 @@ def plot_loss(in_files, out_file, names, colors, smooth_val, limits, dims=(640, 
         limits_y.append(max(values))
 
         if smooth_val[i] != -1:
-            values = _smooth(values, smooth_val[i])
-        plt.plot(steps, values, color=colors[i], alpha=0.8, label=names[i])
+            values = _smooth_i(values, smooth_val[i])
+        plt.plot(steps, values[:1000], color=colors[i], alpha=0.8, label=names[i])
 
     plt.ylim(ymin=0)
     plt.xlim(xmin=0)
@@ -82,8 +104,8 @@ def plot_acc(in_files, out_file, names, colors, smooth_val, limits, dims=(640, 4
         limits_y.append(max(values))
 
         if smooth_val[i] != -1:
-            values = _smooth(values, smooth_val[i])
-        plt.plot(steps, values, color=colors[i], alpha=0.8, label=names[i])
+            values = _smooth_i(values, smooth_val[i])
+        plt.plot(steps, values[:1000], color=colors[i], alpha=0.8, label=names[i])
 
     plt.ylim(ymin=0)
     plt.xlim(xmin=0)
@@ -114,52 +136,56 @@ def plot_acc(in_files, out_file, names, colors, smooth_val, limits, dims=(640, 4
 
 # Best model plots
 
+smooth_var = 10
+
 plot_loss([DATA_DIR + "incres_train_loss.csv", DATA_DIR + "resnet_train_loss.csv", DATA_DIR + "cpm_train_loss.csv", DATA_DIR + "incep_train_loss.csv"],
           OUT_DIR + 'compare_train_loss.png',
-          ["InceptionResNet", "ResNet", "CPM", "Inception"],
+          ["Inception-ResNet-V2", "ResNet34", "CPM", "Inception-V3"],
           ['b', 'r', 'g', 'y'],
-          [8,8,8,8],
-          [-1, -1],
+          [smooth_var*2,smooth_var*2,smooth_var*2,smooth_var*2],
+          [275000, 400],
           (640, 400))
 
-plot_loss([DATA_DIR + "incres_train_acc.csv", DATA_DIR + "resnet_train_acc.csv", DATA_DIR + "cpm_train_acc.csv", DATA_DIR + "incep_train_acc.csv"],
+plot_acc([DATA_DIR + "incres_train_acc.csv", DATA_DIR + "resnet_train_acc.csv", DATA_DIR + "cpm_train_acc.csv", DATA_DIR + "incep_train_acc.csv"],
           OUT_DIR + 'compare_train_acc.png',
-          ["InceptionResNet", "ResNet", "CPM", "Inception"],
+         ["Inception-ResNet-V2", "ResNet34", "CPM", "Inception-V3"],
           ['b', 'r', 'g', 'y'],
-          [8,8,8,8],
-          [-1, -1],
+          [smooth_var,smooth_var,smooth_var,smooth_var],
+          [275000, 0.4],
           (640, 400))
 
 plot_loss([DATA_DIR + "incres_test_loss.csv", DATA_DIR + "resnet_test_loss.csv", DATA_DIR + "cpm_test_loss.csv", DATA_DIR + "incep_test_loss.csv"],
           OUT_DIR + 'compare_test_loss.png',
-          ["InceptionResNet", "ResNet", "CPM", "Inception"],
+          ["Inception-ResNet-V2", "ResNet34", "CPM", "Inception-V3"],
           ['b', 'r', 'g', 'y'],
           [-1,-1,-1,-1],
-          [-1, -1],
+          [275000, 400],
           (640, 400))
 
-plot_loss([DATA_DIR + "incres_test_acc.csv", DATA_DIR + "resnet_test_acc.csv", DATA_DIR + "cpm_test_acc.csv", DATA_DIR + "incep_test_acc.csv"],
+plot_acc([DATA_DIR + "incres_test_acc.csv", DATA_DIR + "resnet_test_acc.csv", DATA_DIR + "cpm_test_acc.csv", DATA_DIR + "incep_test_acc.csv"],
           OUT_DIR + 'compare_test_acc.png',
-          ["InceptionResNet", "ResNet", "CPM", "Inception"],
+          ["Inception-ResNet-V2", "ResNet34", "CPM", "Inception-V3"],
           ['b', 'r', 'g', 'y'],
           [-1,-1,-1,-1],
-          [-1, -1],
+          [275000, 0.4],
           (640, 400))
 
 # Best model Train + Test
 
-# plot_loss([DATA_DIR + "incres_train_loss.csv", DATA_DIR + "incres_test_loss.csv"],
-#           OUT_DIR + 'incres_all_loss.png',
-#           ["Training", "Testing"],
-#           ['b', 'r'],
-#           [10, -1],
-#           [-1, 350],
-#           (640, 400))
-#
-# plot_acc([DATA_DIR + "incres_train_acc.csv", DATA_DIR + "incres_test_acc.csv"],
-#          OUT_DIR + 'incres_all_acc.png',
-#          ["Training", "Testing"],
-#          ['b', 'r'],
-#          [10, -1],
-#          [-1, 0.45],
-#          (640, 400))
+smooth_var = 10
+
+plot_loss([DATA_DIR + "incres_train_loss.csv", DATA_DIR + "incres_test_loss.csv"],
+          OUT_DIR + 'incres_all_loss.png',
+          ["Training", "Testing"],
+          ['b', 'r'],
+          [smooth_var, -1],
+          [-1, 350],
+          (640, 400))
+
+plot_acc([DATA_DIR + "incres_train_acc.csv", DATA_DIR + "incres_test_acc.csv"],
+         OUT_DIR + 'incres_all_acc.png',
+         ["Training", "Testing"],
+         ['b', 'r'],
+         [smooth_var, -1],
+         [-1, 0.45],
+         (640, 400))
