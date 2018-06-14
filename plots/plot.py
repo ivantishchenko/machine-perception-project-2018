@@ -35,6 +35,7 @@ def plot_loss(in_files, out_file, names, colors, smooth_val, limits, dims=(640, 
         steps, values = _extract_data(in_files[i])
         limits_x.append(max(steps))
         limits_y.append(max(values))
+
         if smooth_val[i] != -1:
             values = _smooth(values, smooth_val[i])
         plt.plot(steps, values, color=colors[i], alpha=0.8, label=names[i])
@@ -113,48 +114,52 @@ def plot_acc(in_files, out_file, names, colors, smooth_val, limits, dims=(640, 4
 
 # Best model plots
 
-# plot_loss([DATA_DIR + "train_loss.csv"],
-#           OUT_DIR + 'train_loss.png',
-#           ["MvitNet"],
-#           ['b'],
-#           [9],
-#           [-1, 500])
-#
-# plot_acc([DATA_DIR + "train_acc.csv"],
-#          OUT_DIR + 'train_acc.png',
-#          ["MvitNet"],
-#          ['b'],
-#          [9],
-#          [-1, 0.31])
-#
-# plot_loss([DATA_DIR + "test_loss.csv"],
-#           OUT_DIR + 'test_loss.png',
-#           ["MvitNet"],
-#           ['b'],
-#           [-1],
-#           [-1, 500])
-#
-# plot_acc([DATA_DIR + "test_acc.csv"],
-#          OUT_DIR + 'test_acc.png',
-#          ["MvitNet"],
-#          ['b'],
-#          [-1],
-#          [-1, 0.31])
+plot_loss([DATA_DIR + "incres_train_loss.csv", DATA_DIR + "resnet_train_loss.csv", DATA_DIR + "cpm_train_loss.csv", DATA_DIR + "incep_train_loss.csv"],
+          OUT_DIR + 'compare_train_loss.png',
+          ["InceptionResNet", "ResNet", "CPM", "Inception"],
+          ['b', 'r', 'g', 'y'],
+          [8,8,8,8],
+          [-1, -1],
+          (640, 400))
+
+plot_loss([DATA_DIR + "incres_train_acc.csv", DATA_DIR + "resnet_train_acc.csv", DATA_DIR + "cpm_train_acc.csv", DATA_DIR + "incep_train_acc.csv"],
+          OUT_DIR + 'compare_train_acc.png',
+          ["InceptionResNet", "ResNet", "CPM", "Inception"],
+          ['b', 'r', 'g', 'y'],
+          [8,8,8,8],
+          [-1, -1],
+          (640, 400))
+
+plot_loss([DATA_DIR + "incres_test_loss.csv", DATA_DIR + "resnet_test_loss.csv", DATA_DIR + "cpm_test_loss.csv", DATA_DIR + "incep_test_loss.csv"],
+          OUT_DIR + 'compare_test_loss.png',
+          ["InceptionResNet", "ResNet", "CPM", "Inception"],
+          ['b', 'r', 'g', 'y'],
+          [-1,-1,-1,-1],
+          [-1, -1],
+          (640, 400))
+
+plot_loss([DATA_DIR + "incres_test_acc.csv", DATA_DIR + "resnet_test_acc.csv", DATA_DIR + "cpm_test_acc.csv", DATA_DIR + "incep_test_acc.csv"],
+          OUT_DIR + 'compare_test_acc.png',
+          ["InceptionResNet", "ResNet", "CPM", "Inception"],
+          ['b', 'r', 'g', 'y'],
+          [-1,-1,-1,-1],
+          [-1, -1],
+          (640, 400))
 
 # Best model Train + Test
 
-plot_loss([DATA_DIR + "train_loss.csv", DATA_DIR + "test_loss.csv"],
-          OUT_DIR + 'all_loss.png',
-          ["Training set", "Validation set"],
-          ['b', 'r'],
-          [9, -1],
-          [-1, 500],
-          (640, 400))
-
-plot_acc([DATA_DIR + "train_acc.csv", DATA_DIR + "test_acc.csv"],
-         OUT_DIR + 'all_acc.png',
-         ["Training set", "Validation set"],
-         ['b', 'r'],
-         [9, -1],
-         [-1, 0.31],
-         (640, 400))
+# plot_loss([DATA_DIR + "incres_train_loss.csv", DATA_DIR + "incres_test_loss.csv"],
+#           OUT_DIR + 'incres_all_loss.png',
+#           ["Training", "Testing"],
+#           ['b', 'r'],
+#           [10, -1],
+#           [-1, 350],
+#           (640, 400))
+#
+# plot_acc([DATA_DIR + "incres_train_acc.csv", DATA_DIR + "incres_test_acc.csv"],
+#          OUT_DIR + 'incres_all_acc.png',
+#          ["Training", "Testing"],
+#          ['b', 'r'],
+#          [10, -1],
+#          [-1, 0.45],
+#          (640, 400))
