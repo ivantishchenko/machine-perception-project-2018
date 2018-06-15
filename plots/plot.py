@@ -49,7 +49,7 @@ Plot different models loss on the same graph
 '''
 
 
-def plot_loss(in_files, out_file, names, colors, smooth_val, limits, dims=(640, 480)):
+def plot_loss(in_files, out_file, names, colors, smooth_val, limits, dims=(640, 480), yticks=None):
     num_models = len(in_files)
     limits_x = []
     limits_y = []
@@ -80,12 +80,15 @@ def plot_loss(in_files, out_file, names, colors, smooth_val, limits, dims=(640, 
     if len(names) > 1:
         plt.legend(names)
 
+    if yticks is not None:
+        plt.yticks(yticks)
+
     # set dims
     fig = plt.gcf()
     DPI = fig.get_dpi()
     fig.set_size_inches(dims[0] / float(DPI), dims[1] / float(DPI))
 
-    plt.savefig(out_file)
+    plt.savefig(out_file, bbox_inches='tight')
     plt.gcf().clear()
 
 
@@ -94,7 +97,7 @@ Plot different models acc on the same graph
 '''
 
 
-def plot_acc(in_files, out_file, names, colors, smooth_val, limits, dims=(640, 480)):
+def plot_acc(in_files, out_file, names, colors, smooth_val, limits, dims=(640, 480), yticks=None):
     num_models = len(in_files)
     limits_x = []
     limits_y = []
@@ -125,12 +128,15 @@ def plot_acc(in_files, out_file, names, colors, smooth_val, limits, dims=(640, 4
     if len(names) > 1:
         plt.legend(names)
 
+    if yticks is not None:
+        plt.yticks(yticks)
+
     # set dims
     fig = plt.gcf()
     DPI = fig.get_dpi()
     fig.set_size_inches(dims[0] / float(DPI), dims[1] / float(DPI))
 
-    plt.savefig(out_file)
+    plt.savefig(out_file, bbox_inches='tight')
     plt.gcf().clear()
 
 
@@ -138,54 +144,67 @@ def plot_acc(in_files, out_file, names, colors, smooth_val, limits, dims=(640, 4
 
 smooth_var = 10
 
-plot_loss([DATA_DIR + "incres_train_loss.csv", DATA_DIR + "resnet_train_loss.csv", DATA_DIR + "cpm_train_loss.csv", DATA_DIR + "incep_train_loss.csv"],
+
+ticks = np.arange(0, 500, 100)
+plot_loss([DATA_DIR + "incres_train_loss.csv", DATA_DIR + "resnet_train_loss.csv", DATA_DIR + "glover_train_loss.csv", DATA_DIR + "incep_train_loss.csv"],
           OUT_DIR + 'compare_train_loss.png',
-          ["Inception-ResNet-V2", "ResNet34", "CPM", "Inception-V3"],
+          ["Inception-ResNet-v2", "ResNet34", "CPM", "Inception-v3"],
           ['b', 'r', 'g', 'y'],
           [smooth_var*2,smooth_var*2,smooth_var*2,smooth_var*2],
-          [275000, 400],
-          (640, 400))
+          [243000, 400],
+          (640, 400),
+          ticks)
 
-plot_acc([DATA_DIR + "incres_train_acc.csv", DATA_DIR + "resnet_train_acc.csv", DATA_DIR + "cpm_train_acc.csv", DATA_DIR + "incep_train_acc.csv"],
+ticks = np.arange(0, 0.5, 0.1)
+plot_acc([DATA_DIR + "incres_train_acc.csv", DATA_DIR + "resnet_train_acc.csv", DATA_DIR + "glover_train_acc.csv", DATA_DIR + "incep_train_acc.csv"],
           OUT_DIR + 'compare_train_acc.png',
-         ["Inception-ResNet-V2", "ResNet34", "CPM", "Inception-V3"],
+         ["Inception-ResNet-v2", "ResNet34", "CPM", "Inception-v3"],
           ['b', 'r', 'g', 'y'],
           [smooth_var,smooth_var,smooth_var,smooth_var],
-          [275000, 0.4],
-          (640, 400))
+          [243000, 0.4],
+          (640, 400),
+          ticks)
 
-plot_loss([DATA_DIR + "incres_test_loss.csv", DATA_DIR + "resnet_test_loss.csv", DATA_DIR + "cpm_test_loss.csv", DATA_DIR + "incep_test_loss.csv"],
+ticks = np.arange(0, 500, 100)
+plot_loss([DATA_DIR + "incres_test_loss.csv", DATA_DIR + "resnet_test_loss.csv", DATA_DIR + "glover_test_loss.csv", DATA_DIR + "incep_test_loss.csv"],
           OUT_DIR + 'compare_test_loss.png',
-          ["Inception-ResNet-V2", "ResNet34", "CPM", "Inception-V3"],
+          ["Inception-ResNet-v2", "ResNet34", "CPM", "Inception-v3"],
           ['b', 'r', 'g', 'y'],
           [-1,-1,-1,-1],
-          [275000, 400],
-          (640, 400))
+          [243000, 400],
+          (640, 400),
+          ticks)
 
-plot_acc([DATA_DIR + "incres_test_acc.csv", DATA_DIR + "resnet_test_acc.csv", DATA_DIR + "cpm_test_acc.csv", DATA_DIR + "incep_test_acc.csv"],
+ticks = np.arange(0, 0.5, 0.1)
+plot_acc([DATA_DIR + "incres_test_acc.csv", DATA_DIR + "resnet_test_acc.csv", DATA_DIR + "glover_test_acc.csv", DATA_DIR + "incep_test_acc.csv"],
           OUT_DIR + 'compare_test_acc.png',
-          ["Inception-ResNet-V2", "ResNet34", "CPM", "Inception-V3"],
+          ["Inception-ResNet-v2", "ResNet34", "CPM", "Inception-v3"],
           ['b', 'r', 'g', 'y'],
           [-1,-1,-1,-1],
-          [275000, 0.4],
-          (640, 400))
+          [243000, 0.4],
+          (640, 400),
+          ticks)
 
 # Best model Train + Test
 
 smooth_var = 10
 
+ticks = np.arange(0, 250, 50)
 plot_loss([DATA_DIR + "incres_train_loss.csv", DATA_DIR + "incres_test_loss.csv"],
           OUT_DIR + 'incres_all_loss.png',
           ["Training", "Validation"],
           ['b', 'r'],
           [smooth_var, -1],
-          [-1, 350],
-          (640, 400))
+          [-1, 200],
+          (640, 400),
+          ticks)
 
+ticks = np.arange(0, 0.55, 0.1)
 plot_acc([DATA_DIR + "incres_train_acc.csv", DATA_DIR + "incres_test_acc.csv"],
          OUT_DIR + 'incres_all_acc.png',
          ["Training", "Validation"],
          ['b', 'r'],
          [smooth_var, -1],
          [-1, 0.45],
-         (640, 400))
+         (640, 400),
+         ticks)
