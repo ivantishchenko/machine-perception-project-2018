@@ -60,7 +60,7 @@ def plot_loss(in_files, out_file, names, colors, smooth_val, limits, dims=(640, 
 
         if smooth_val[i] != -1:
             values = _smooth_i(values, smooth_val[i])
-        plt.plot(steps, values[:1000], color=colors[i], alpha=0.8, label=names[i])
+        plt.plot(steps, values[:1000], color=colors[i], alpha=1.0, label=names[i])
 
     plt.ylim(ymin=0)
     plt.xlim(xmin=0)
@@ -108,7 +108,7 @@ def plot_acc(in_files, out_file, names, colors, smooth_val, limits, dims=(640, 4
 
         if smooth_val[i] != -1:
             values = _smooth_i(values, smooth_val[i])
-        plt.plot(steps, values[:1000], color=colors[i], alpha=0.8, label=names[i])
+        plt.plot(steps, values[:1000], color=colors[i], alpha=1.0, label=names[i])
 
     plt.ylim(ymin=0)
     plt.xlim(xmin=0)
@@ -144,56 +144,59 @@ def plot_acc(in_files, out_file, names, colors, smooth_val, limits, dims=(640, 4
 
 smooth_var = 10
 
-
+labels = ["Inception-v3", "ResNet34", "CPM", "Inception-ResNet-v2"]
+old_colors = ['b', 'r', 'g', 'y']
+# BLUE, ORANGE, RED, GREEN
+colors = [(57/255,106/255,177/255),(218/255,124/255,48/255), (204/255,37/255,41/255), (62/255,150/255,81/255)]
 ticks = np.arange(0, 500, 100)
-plot_loss([DATA_DIR + "incres_train_loss.csv", DATA_DIR + "resnet_train_loss.csv", DATA_DIR + "glover_train_loss.csv", DATA_DIR + "incep_train_loss.csv"],
+plot_loss([DATA_DIR + "incep_train_loss.csv", DATA_DIR + "resnet_train_loss.csv", DATA_DIR + "glover_train_loss.csv", DATA_DIR + "incres_train_loss.csv"],
           OUT_DIR + 'compare_train_loss.png',
-          ["Inception-ResNet-v2", "ResNet34", "CPM", "Inception-v3"],
-          ['b', 'r', 'g', 'y'],
+          labels,
+          colors,
           [smooth_var*2,smooth_var*2,smooth_var*2,smooth_var*2],
           [243000, 400],
           (640, 400),
           ticks)
 
 ticks = np.arange(0, 0.5, 0.1)
-plot_acc([DATA_DIR + "incres_train_acc.csv", DATA_DIR + "resnet_train_acc.csv", DATA_DIR + "glover_train_acc.csv", DATA_DIR + "incep_train_acc.csv"],
+plot_acc([DATA_DIR + "incep_train_acc.csv", DATA_DIR + "resnet_train_acc.csv", DATA_DIR + "glover_train_acc.csv", DATA_DIR + "incres_train_acc.csv"],
           OUT_DIR + 'compare_train_acc.png',
-         ["Inception-ResNet-v2", "ResNet34", "CPM", "Inception-v3"],
-          ['b', 'r', 'g', 'y'],
+          labels,
+          colors,
           [smooth_var,smooth_var,smooth_var,smooth_var],
           [243000, 0.4],
           (640, 400),
           ticks)
 
 ticks = np.arange(0, 500, 100)
-plot_loss([DATA_DIR + "incres_test_loss.csv", DATA_DIR + "resnet_test_loss.csv", DATA_DIR + "glover_test_loss.csv", DATA_DIR + "incep_test_loss.csv"],
+plot_loss([DATA_DIR + "incep_test_loss.csv", DATA_DIR + "resnet_test_loss.csv", DATA_DIR + "glover_test_loss.csv", DATA_DIR + "incres_test_loss.csv"],
           OUT_DIR + 'compare_test_loss.png',
-          ["Inception-ResNet-v2", "ResNet34", "CPM", "Inception-v3"],
-          ['b', 'r', 'g', 'y'],
+          labels,
+          colors,
           [-1,-1,-1,-1],
           [243000, 400],
           (640, 400),
           ticks)
 
 ticks = np.arange(0, 0.5, 0.1)
-plot_acc([DATA_DIR + "incres_test_acc.csv", DATA_DIR + "resnet_test_acc.csv", DATA_DIR + "glover_test_acc.csv", DATA_DIR + "incep_test_acc.csv"],
+plot_acc([DATA_DIR + "incep_test_acc.csv", DATA_DIR + "resnet_test_acc.csv", DATA_DIR + "glover_test_acc.csv", DATA_DIR + "incres_test_acc.csv"],
           OUT_DIR + 'compare_test_acc.png',
-          ["Inception-ResNet-v2", "ResNet34", "CPM", "Inception-v3"],
-          ['b', 'r', 'g', 'y'],
+          labels,
+          colors,
           [-1,-1,-1,-1],
           [243000, 0.4],
           (640, 400),
           ticks)
 
 # Best model Train + Test
-
 smooth_var = 10
-
+# BLUE, RED
+colors = [(57/255,106/255,177/255), (204/255,37/255,41/255)]
 ticks = np.arange(0, 250, 50)
 plot_loss([DATA_DIR + "incres_train_loss.csv", DATA_DIR + "incres_test_loss.csv"],
           OUT_DIR + 'incres_all_loss.png',
           ["Training", "Validation"],
-          ['b', 'r'],
+          colors,
           [smooth_var, -1],
           [-1, 200],
           (640, 400),
@@ -203,7 +206,7 @@ ticks = np.arange(0, 0.55, 0.1)
 plot_acc([DATA_DIR + "incres_train_acc.csv", DATA_DIR + "incres_test_acc.csv"],
          OUT_DIR + 'incres_all_acc.png',
          ["Training", "Validation"],
-         ['b', 'r'],
+         colors,
          [smooth_var, -1],
          [-1, 0.45],
          (640, 400),
