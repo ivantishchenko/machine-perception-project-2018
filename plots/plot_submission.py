@@ -7,8 +7,8 @@ colours = {0: 'black', 1: 'blue', 2: 'orange', 3: 'green', 4: 'red', 5: 'yellow'
 
 DATASET_PATH = '../datasets/testing.h5'
 SUBMISSION_PATH = 'sub/'
-OUT_PATH = 'img/'
-N = 10
+OUT_PATH = 'img/sub/'
+N = 5
 
 
 def plot_submission(dataset, submission, out_pattern, select_idx, normalized=True):
@@ -46,7 +46,10 @@ def plot_submission(dataset, submission, out_pattern, select_idx, normalized=Tru
 g = h5py.File(DATASET_PATH, 'r')
 testset = g['test']
 
-select_idx = np.random.random_integers(0, len(testset['img']) - 1, 10)
+select_idx = np.random.random_integers(0, len(testset['img']) - 1, N)
 
 # plot submissions
-plot_submission(testset, SUBMISSION_PATH + 'submission.csv', OUT_PATH + 'res', select_idx)
+plot_submission(testset, SUBMISSION_PATH + 'incres.csv', OUT_PATH + 'incres', select_idx)
+plot_submission(testset, SUBMISSION_PATH + 'incep.csv', OUT_PATH + 'incep', select_idx)
+plot_submission(testset, SUBMISSION_PATH + 'resnet.csv', OUT_PATH + 'resnet', select_idx)
+plot_submission(testset, SUBMISSION_PATH + 'cpm.csv', OUT_PATH + 'cpm', select_idx)
