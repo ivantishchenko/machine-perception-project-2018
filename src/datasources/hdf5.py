@@ -126,7 +126,7 @@ class HDF5Source(BaseDataSource):
         if self.validation or not self.testing:
             kp_2D = entry['kp_2D']
             if not self.validation:
-                augmentation_flag = np.random.binomial(1, 0.5)
+                augmentation_flag = np.random.binomial(1, 0.7)
                 if augmentation_flag == 0:
                     op_array = np.random.randint(2, size=aug.NUM_TRANSFORMATIONS)
                     if op_array[2] == 1:
@@ -150,10 +150,10 @@ class HDF5Source(BaseDataSource):
                         img = aug.change_contrast(img)
                     if op_array[5] == 1:
                         img = aug.change_brightness(img)
-                    #if op_array[6] == 1:
-                    #    img = aug.dropout(img)
-                    #if op_array[7] == 1:
-                    #    img = aug.salt_pepper(img)
+                    if op_array[6] == 1:
+                        img = aug.dropout(img)
+                    if op_array[7] == 1:
+                        img = aug.salt_pepper(img)
 
                     # Update keypoint visibility (this should be equal to noop for the current design, no points go out
                     # of the image
