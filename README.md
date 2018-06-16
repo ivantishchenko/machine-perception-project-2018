@@ -91,14 +91,14 @@ We have the following selection of networks for quick training:
 All networks are called with their own `main-*.py` file in `./src`. Their source code can be found in `./src/models/*`
 
 As we experimented with different training pipelines (mainly image augmentation) we prepared git commits which reflect
-the whole state of the repository. Checkout the repository to one of the following commits execute then:
+the whole state of the repository. Checkout the repository to one of the following commits, then execute:
 ```
 cd src
 python3 ./main-$NETWORK.py
 ```
 where `$NETWORK` is one of the four types as explained above.
 
-The commit commits are as follows (please update to current HEAD for a full list):
+The commits are as follows (please update to current HEAD for a full list):
   * Inception-ResNet-v2: 915ae3f30ca04ecac046fb58cb04d2b372e9bde0
   * ResNet34: 8326e1e8aa0fbe48d078e15674c99e2724432615
   * CPM: 8326e1e8aa0fbe48d078e15674c99e2724432615
