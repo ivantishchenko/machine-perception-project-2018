@@ -1,0 +1,52 @@
+% Use a modified ACM conference proceedings template
+\documentclass[sigconf]{acmart}
+% Disable some elements from ACM template
+\setcopyright{none}
+\settopmatter{printacmref=false,printfolios=false}
+
+\usepackage{booktabs} % For formal tables
+
+% *sigh* because obviously packages are missing
+\usepackage[utf8]{inputenc}
+\usepackage{subcaption}
+\captionsetup[table]{justification=justified, textfont={normal}}
+\captionsetup[subfigure]{skip=0pt}
+
+% Helper Macros
+\newcommand{\todo}[1]{\textcolor{red}{\texttt{\textsc{Todo:} #1}}}
+\newcommand{\ra}[1]{\renewcommand{\arraystretch}{#1}}
+
+\begin{document}
+\title{Machine Perception 2018 \textendash{} Project Report}
+\subtitle{Hand Joint Recognition}
+
+\author{Ivan Tishchenko}\affiliation{ETH Zürich}
+\email{tivan@student.ethz.ch}
+
+\author{Mickey Vänskä}\affiliation{ETH Zürich}
+\email{mickeyv@student.ethz.ch}
+
+\begin{abstract}
+% Basic Introduction (1-2 sentences)
+The advances of scientific methods in the area of artificial intelligence (e.g. computers becoming professional Go players) allow researchers to turn dreams into reality. A known challenge in the fields of computer vision and machine learning is the extraction of specific information from images and videos.
+% More detailed background (2-3 sentences)
+One concrete application is detecting people and related information in images, as for instance human pose estimation or motion prediction to avoid collisions in driverless cars. These fields have seen increasing attention lately, however there are relatively few papers available on data extraction from specific body parts, such as hands.
+% General Problem Statement (1 sentence)
+Hand pose estimation proves to be a complex challenge due to the high rate of self-occlusion and agile poses combined with the large number of joints concentrated in a small volume.
+% Result Summary (1 sentence)
+This project explores the use of various CNNs for annotating respective joints in images of hands and concludes a modified Inception-ResNet-v2 to be the fittest.
+% Main Result in direct comparison (2-3 sentences)
+In direct comparison with a custom ResNet34, the network is expected to perform better by being a continuation of Residual Networks combined with Inception, thus extracting more features at each step. A CPM was also designed and showed a shallower accuracy slope at later epochs. Suprisingly, in the case of Residual Networks more layers led to worse performance.
+% General Context (1-2 sentences)
+Even though Residual Networks and Inception-ResNet-v2 were designed for classification tasks, their use in regression tasks is still a viable solution. Our results demonstrate the viability of Inception-ResNet-v2 in the scope of joint estimation and we expect to see further work based on them in the field of pose estimation.
+% Broader Perspective (2-3 sentences)
+Generally we expect to see more network designs in the future which allow generic feature extraction and are easily adaptable with high accuracy for many tasks. However, specialized networks will always exist for very high accuracy.
+\end{abstract}
+
+\maketitle
+\input{mp-report-body}
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{bibliography}
+
+\end{document}
