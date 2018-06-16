@@ -444,7 +444,8 @@ class InceptionResNetv2(BasicLayers):
         :param is_training: Is this layer in training mode?
         :return: 21 predictions of (x, y) tuples for an arbitrary amount of batches.
         """
-        return self.pred_layer(in_tensor, is_training, activation_fun=tf.nn.leaky_relu)
+        with tf.variable_scope('resnet_pred'):
+            return self.pred_layer(in_tensor, is_training, activation_fun=tf.nn.leaky_relu)
 
     def stem(self, in_tensor, is_training):
         with tf.variable_scope("Stem"):
