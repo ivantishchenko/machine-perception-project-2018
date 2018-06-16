@@ -27,10 +27,22 @@ class BasicLayers(object):
         :return: Application of leaky-relu on the layer
 
         """
-        layer = tf.nn.relu(tensor, name=name)
-        # layer = tf.nn.leaky_relu(tensor, self.SLOPE_LRU, name=name)
+        layer = tf.nn.leaky_relu(tensor, self.SLOPE_LRU, name=name)
         if self.visualize:
             # self.summary.feature_maps(name, layer)
+            self.summary.histogram(name + '/layer', layer)
+        return layer
+
+    def _relu(self, tensor, name='leaky_relu'):
+        """
+        Apply a relu activation layer to the input tensor.
+        :param tensor: Tensor which to apply relu on
+        :param name: Name of this layer
+        :return: Application of relu on the layer
+
+        """
+        layer = tf.nn.relu(tensor, name=name)
+        if self.visualize:
             self.summary.histogram(name + '/layer', layer)
         return layer
 
@@ -264,7 +276,7 @@ class BasicLayers(object):
         Apply a fully connected layer with either custom leaky_relu or requested activation_fn on the input tensor.
         :param tensor: Tensor on which to apply a fully connected layer on
         :param out_chan: Number of output neurons
-        :param activation_fun: Activation function (leaky_relu uses custom leaky relu)
+        :param activation_fun: Activation function ([leaky_]relu uses custom [leaky ]relu)
         :param name: Name of this layer (not used)
         :param is_training: Is this layer in training mode?
         :return: Application of a fully connected layer on the input
@@ -288,7 +300,7 @@ class BasicLayers(object):
                 scope=None
             )
 
-        if activation_fun is tf.nn.leaky_relu:
+        if activation_fun is tf.nn.leaky_relu or activation_fun is tf.nn.relu:
             layer = __fc(act_fun=None)
             if self.visualize:
                 # self.summary.feature_maps(name, layer)
@@ -298,7 +310,10 @@ class BasicLayers(object):
                     biases = tf.get_variable('biases')
                     self.summary.histogram(name + '/weights', weights)
                     self.summary.histogram(name + '/biases', biases)
-            layer = self._leaky_relu(layer)
+            if activation_fun is tf.nn.leaky_relu:
+                layer = self._leaky_relu(layer)
+            else:
+                layer = self._relu(layer)
         else:
             layer = __fc(act_fun=activation_fun)
             print(name)
@@ -309,7 +324,7 @@ class BasicLayers(object):
     def conv_layer(self, in_tensor, layer_name, kernel_size, out_chan, is_training, stride=1, max_pool=False,
                    disable_dropout=True):
         """
-        Wrapper to apply 2d-convolutions with various extra ops (max_pool, leaky_relu, batch_norm, dropout).
+        Wrapper to apply 2d-convolutions with various extra ops (max_pool, relu, batch_norm, dropout).
         :param in_tensor: Tensor on which to apply this wrapper on
         :param layer_name: Name of this layer and related scope
         :param kernel_size: Size of the convolutional kernel (accepts tuple or single int)
@@ -327,7 +342,7 @@ class BasicLayers(object):
                 # maxpool(relu(input)) == relu(maxpool(input)); this ordering is a tiny opt which is not general
                 # https://github.com/tensorflow/tensorflow/issues/3180#issuecomment-288389772
                 tensor = self._max_pool(tensor=tensor)
-            tensor = self._leaky_relu(tensor=tensor)
+            tensor = self._relu(tensor=tensor)
             # https://github.com/ducha-aiki/caffenet-benchmark/blob/master/batchnorm.md
             tensor = self._batch_normalization(tensor=tensor, is_training=is_training)
             if not disable_dropout:
@@ -336,7 +351,7 @@ class BasicLayers(object):
 
     def conv_relu(self, in_tensor, layer_name, kernel_size, out_chan, is_training, stride=1, max_pool=False):
         """
-        Wrapper to apply 2d-convolutions with a select few ops (leaky_relu, max_pool).
+        Wrapper to apply 2d-convolutions with a select few ops (relu, max_pool).
         :param in_tensor: Tensor on which to apply this wrapper on
         :param layer_name: Name of this layer and related scope
         :param kernel_size: Size of the convolutional kernel (accepts tuple or single int)
@@ -349,12 +364,13 @@ class BasicLayers(object):
         with tf.variable_scope(layer_name):
             tensor = self._conv(tensor=in_tensor, kernel_size=kernel_size, out_chan=out_chan, is_training=is_training,
                                 stride=stride)
-            tensor = self._leaky_relu(tensor=tensor)
+            tensor = self._relu(tensor=tensor)
             if max_pool:
                 tensor = self._max_pool(tensor=tensor)
             return tensor
 
-    def fc_relu(self, in_tensor, layer_name, out_chan, is_training, droprate=0.5, disable_dropout=False):
+    def fc_relu(self, in_tensor, layer_name, out_chan, is_training, droprate=0.5, disable_dropout=False,
+                activation_fun=tf.nn.relu):
         """
         Wrapper for a fully connected layer with leaky_relu and default dropout of 0.5
         :param in_tensor: Input tensor on which to apply this wrapper on
@@ -363,20 +379,28 @@ class BasicLayers(object):
         :param droprate: Droprate of the dropout layer
         :param disable_dropout: Disable dropout (usually turned on)
         :param is_training: Is this layer in training mode?
-        :return: Application of a fully connected leaky relu layer with potential dropout
+        :param activation_fun: Activation function after fully connected layer (default is relu)
+        :return: Application of a fully connected relu layer with potential dropout
         """
         with tf.variable_scope(layer_name):
             tensor = self._fully_connected(tensor=in_tensor, out_chan=out_chan, is_training=is_training,
-                                           activation_fun=tf.nn.leaky_relu)
+                                           activation_fun=activation_fun)
             if not disable_dropout:
                 tensor = self._dropout(tensor=tensor, is_training=is_training, rate=droprate)
             return tensor
 
-    def pred_layer(self, in_tensor, is_training):
+    def pred_layer(self, in_tensor, is_training, activation_fun=tf.nn.relu):
+        """
+        Basic prediction layer flattening the input and predicting on 42 neurons.
+        :param in_tensor: Input tensor on which to predict results from
+        :param is_training: Is this layer in training mode?
+        :param activation_fun: Activation function of fully connected layer
+        :return: Application of predictions on the input.
+        """
         with tf.variable_scope('pred'):
             result = tf.contrib.layers.flatten(in_tensor)
             result = self.fc_relu(result, 'fc_relu', out_chan=BasicLayers.KEYPOINTS * 2, is_training=is_training,
-                                  disable_dropout=True)
+                                  disable_dropout=True, activation_fun=activation_fun)
             return tf.reshape(result, (-1, 21, 2))
 
 
@@ -385,18 +409,15 @@ class InceptionResNetv2(BasicLayers):
     A helper class to quickly generate different Inception/ResNet networks. The blocks can be made to use full
     preactivation.
     """
-    # http://torch.ch/blog/2016/02/04/resnets.html
-    MINIMAL_FEATURES = 64
     FULL_PREACTIVATION = False
 
-    def __init__(self, summary, visualize=False, minimal_features=64, full_preactivation=False):
+    def __init__(self, summary, visualize=False, full_preactivation=False):
         """
         Default constructor.
         :param summary: Summary object to allow logging.
         :param visualize: Enable logging?
         """
         super().__init__(summary, visualize)
-        self.MINIMAL_FEATURES = minimal_features
         self.FULL_PREACTIVATION = full_preactivation
 
     def _cbr(self, in_tensor, kernel_size, out_chan, is_training=True, stride=1, padding='same', name=None):
@@ -415,6 +436,15 @@ class InceptionResNetv2(BasicLayers):
             tensor = self._conv(tensor=tensor, kernel_size=kernel_size, out_chan=out_chan,
                                 is_training=is_training, stride=stride, name='conv2d_' + name)
         return tensor
+
+    def prediction_layer(self, in_tensor, is_training):
+        """
+        A simple prediction layer for Inception-ResNets.
+        :param in_tensor: Tensor from which to predict results from.
+        :param is_training: Is this layer in training mode?
+        :return: 21 predictions of (x, y) tuples for an arbitrary amount of batches.
+        """
+        return self.pred_layer(in_tensor, is_training, activation_fun=tf.nn.leaky_relu)
 
     def stem(self, in_tensor, is_training):
         with tf.variable_scope("Stem"):
@@ -467,7 +497,6 @@ class InceptionResNetv2(BasicLayers):
             tensor = tf.concat([tensor1, tensor2, tensor3], axis=1)
             return tensor
 
-
     def block17(self, in_tensor, is_training, name):
         with tf.variable_scope("Inception-resnet-B" + name):
             tensor = in_tensor
@@ -483,7 +512,6 @@ class InceptionResNetv2(BasicLayers):
             tensor = self._leaky_relu(tensor)
             return tensor
 
-
     def block18(self, in_tensor, is_training):
         with tf.variable_scope("Reduction-B"):
             tensor = in_tensor
@@ -497,7 +525,6 @@ class InceptionResNetv2(BasicLayers):
             tensor4 = self._max_pool(tensor, pool=3, stride=2, padding='valid', name='d0')
             tensor = tf.concat([tensor1, tensor2, tensor3, tensor4], axis=1)
             return tensor
-
 
     def block19(self, in_tensor, is_training, name):
         with tf.variable_scope("Inception-resnet-C" + name):
@@ -547,7 +574,7 @@ class ResNetLayers(BasicLayers):
 
     def _cbr(self, in_tensor, kernel_size, out_chan, is_training=True, stride=1, padding='same', dilation=1, name=None):
         """
-        Helper to generate quick convolutional layers with batch normalization/leaky relu with or without full
+        Helper to generate quick convolutional layers with batch normalization/relu with or without full
         preactivation.
         :return:
         """
@@ -557,7 +584,7 @@ class ResNetLayers(BasicLayers):
                                 is_training=is_training, stride=stride, padding=padding, dilation=dilation,
                                 name='conv2d-' + name)
         tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm-' + name)
-        tensor = self._leaky_relu(tensor=tensor, name='leaky_relu-' + name)
+        tensor = self._relu(tensor=tensor, name='leaky_relu-' + name)
         if self.FULL_PREACTIVATION:
             tensor = self._conv(tensor=tensor, kernel_size=kernel_size, out_chan=out_chan,
                                 is_training=is_training, stride=stride, name='conv2d-' + name)
@@ -565,7 +592,7 @@ class ResNetLayers(BasicLayers):
 
     def _tcbr(self, in_tensor, kernel_size, out_chan, is_training=True, stride=1, padding='same', name=None):
         """
-        Helper to generate quick convolutional layers with batch normalization/leaky relu with or without full
+        Helper to generate quick convolutional layers with batch normalization/relu with or without full
         preactivation.
         :return:
         """
@@ -574,7 +601,7 @@ class ResNetLayers(BasicLayers):
             tensor = self._upconv(tensor=tensor, kernel_size=kernel_size, out_chan=out_chan,
                                   is_training=is_training, stride=stride, padding=padding, name='conv2d_t-' + name)
         tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm-' + name)
-        tensor = self._leaky_relu(tensor=tensor, name='leaky_relu-' + name)
+        tensor = self._relu(tensor=tensor, name='leaky_relu-' + name)
         if self.FULL_PREACTIVATION:
             tensor = self._upconv(tensor=tensor, kernel_size=kernel_size, out_chan=out_chan,
                                   is_training=is_training, stride=stride, name='conv2d_t-' + name)
@@ -590,7 +617,7 @@ class ResNetLayers(BasicLayers):
         with tf.variable_scope('resnet_init'):
             tensor = self._conv(tensor=in_tensor, kernel_size=5, out_chan=64, is_training=is_training, stride=2)
             tensor = self._batch_normalization(tensor=tensor, is_training=is_training)
-            tensor = self._leaky_relu(tensor=tensor)
+            tensor = self._relu(tensor=tensor)
             tensor = self._max_pool(tensor=tensor, pool=3, stride=2)
             return tensor
 
@@ -611,7 +638,7 @@ class ResNetLayers(BasicLayers):
                     tensor = self._conv(tensor=tensor, kernel_size=1, out_chan=2048, is_training=is_training, stride=1,
                                         name='conv2d-1')
                 tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm-1')
-                tensor = self._leaky_relu(tensor=tensor, name='leaky_relu-1')
+                tensor = self._relu(tensor=tensor, name='leaky_relu-1')
                 if self.FULL_PREACTIVATION:
                     tensor = self._conv(tensor=tensor, kernel_size=1, out_chan=2048, is_training=is_training, stride=1,
                                         name='conv2d-1')
@@ -622,7 +649,7 @@ class ResNetLayers(BasicLayers):
                     tensor = self._conv(tensor, kernel_size=1, out_chan=4096, is_training=is_training, stride=1,
                                         name='conv2d-2')
                 tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm-2')
-                tensor = self._leaky_relu(tensor=tensor, name='leaky_relu-2')
+                tensor = self._relu(tensor=tensor, name='leaky_relu-2')
                 if self.FULL_PREACTIVATION:
                     tensor = self._conv(tensor, kernel_size=1, out_chan=4096, is_training=is_training, stride=1,
                                         name='conv2d-2')
@@ -634,7 +661,7 @@ class ResNetLayers(BasicLayers):
                     tensor = self._upconv(tensor=tensor, kernel_size=3, out_chan=self.KEYPOINTS,
                                           is_training=is_training, stride=2, name='conv2d_t')
                 tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm')
-                tensor = self._leaky_relu(tensor=tensor, name='leaky_relu')
+                tensor = self._relu(tensor=tensor, name='leaky_relu')
                 if self.FULL_PREACTIVATION:
                     tensor = self._upconv(tensor=tensor, kernel_size=3, out_chan=self.KEYPOINTS,
                                           is_training=is_training, stride=2, name='conv2d_t')
@@ -646,7 +673,7 @@ class ResNetLayers(BasicLayers):
                         tensor2 = self._conv(tensor=tensor2, kernel_size=1, out_chan=self.KEYPOINTS,
                                              is_training=is_training, stride=1, name='conv2d')
                     tensor2 = self._batch_normalization(tensor=tensor2, is_training=is_training, name='batch_norm2')
-                    tensor2 = self._leaky_relu(tensor=tensor2, name='leaky_relu2')
+                    tensor2 = self._relu(tensor=tensor2, name='leaky_relu2')
                     if self.FULL_PREACTIVATION:
                         tensor2 = self._conv(tensor=tensor, kernel_size=1, out_chan=self.KEYPOINTS,
                                              is_training=is_training, stride=2, name='conv2d')
@@ -674,7 +701,7 @@ class ResNetLayers(BasicLayers):
                     result = self._conv(tensor=result, kernel_size=1, out_chan=BasicLayers.KEYPOINTS * 2,
                                         is_training=is_training, stride=1)
                 result = self._batch_normalization(tensor=result, is_training=is_training)
-                result = self._leaky_relu(tensor=result)
+                result = self._relu(tensor=result)
                 if self.FULL_PREACTIVATION:
                     result = self._conv(tensor=result, kernel_size=1, out_chan=BasicLayers.KEYPOINTS * 2,
                                         is_training=is_training, stride=1)
@@ -711,7 +738,7 @@ class ResNetLayers(BasicLayers):
             tensor = self._conv(tensor=tensor, kernel_size=3, out_chan=out_chan, is_training=is_training, stride=strides,
                             dilation=dilation, name='conv2d-1')
         tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm-1')
-        tensor = self._leaky_relu(tensor=tensor, name='leaky_relu-1')
+        tensor = self._relu(tensor=tensor, name='leaky_relu-1')
         if self.FULL_PREACTIVATION:
             tensor = self._conv(tensor=tensor, kernel_size=3, out_chan=out_chan, is_training=is_training, stride=strides,
                             dilation=dilation, name='conv2d-1')
@@ -722,7 +749,7 @@ class ResNetLayers(BasicLayers):
         tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm-2')
         if not self.FULL_PREACTIVATION:
             return tensor
-        tensor = self._leaky_relu(tensor=tensor, name='leaky_relu-2')
+        tensor = self._relu(tensor=tensor, name='leaky_relu-2')
         if self.FULL_PREACTIVATION:
             tensor = self._conv(tensor=tensor, kernel_size=3, out_chan=out_chan, is_training=is_training, stride=1,
                                 dilation=dilation, name='conv2d-2')
@@ -747,7 +774,7 @@ class ResNetLayers(BasicLayers):
             tensor = self._conv(tensor=tensor, kernel_size=1, out_chan=out_chan, stride=strides,
                                 is_training=is_training, name='conv2d-1')
         tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm-1')
-        tensor = self._leaky_relu(tensor=tensor, name='leaky_relu-1')
+        tensor = self._relu(tensor=tensor, name='leaky_relu-1')
         if self.FULL_PREACTIVATION:
             tensor = self._conv(tensor=tensor, kernel_size=1, out_chan=out_chan, stride=strides,
                                 is_training=is_training, name='conv2d-1')
@@ -756,7 +783,7 @@ class ResNetLayers(BasicLayers):
             tensor = self._conv(tensor=tensor, kernel_size=3, out_chan=out_chan, is_training=is_training, stride=1,
                                 dilation=dilation, name='conv2d-2')
         tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm-2')
-        tensor = self._leaky_relu(tensor=tensor, name='leaky_relu-2')
+        tensor = self._relu(tensor=tensor, name='leaky_relu-2')
         if self.FULL_PREACTIVATION:
             tensor = self._conv(tensor=tensor, kernel_size=3, out_chan=out_chan, is_training=is_training, stride=1,
                                 dilation=dilation, name='conv2d-2')
@@ -767,7 +794,7 @@ class ResNetLayers(BasicLayers):
         tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm-3')
         if not self.FULL_PREACTIVATION:
             return tensor
-        tensor = self._leaky_relu(tensor=tensor, name='leaky_relu-2')
+        tensor = self._relu(tensor=tensor, name='leaky_relu-2')
         if self.FULL_PREACTIVATION:
             tensor = self._conv(tensor=tensor, kernel_size=1, out_chan=4 * out_chan, is_training=is_training, stride=1,
                                 name='conv2d-3')
@@ -797,7 +824,7 @@ class ResNetLayers(BasicLayers):
             tensor = self._conv(tensor=tensor, kernel_size=(1, 3), out_chan=out_chan, is_training=is_training,
                                 stride=(1, strides), dilation=(1, dilation), name='conv2d-1')
         tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm-1')
-        tensor = self._leaky_relu(tensor=tensor, name='leaky_relu-1')
+        tensor = self._relu(tensor=tensor, name='leaky_relu-1')
         if self.FULL_PREACTIVATION:
             tensor = self._conv(tensor=tensor, kernel_size=(1, 3), out_chan=out_chan, is_training=is_training,
                                 stride=(1, strides), dilation=(1, dilation), name='conv2d-1')
@@ -806,7 +833,7 @@ class ResNetLayers(BasicLayers):
             tensor = self._conv(tensor=tensor, kernel_size=(3, 1), out_chan=out_chan, is_training=is_training,
                                 stride=(strides, 1), dilation=(dilation, 1), name='conv2d-2')
         tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm-2')
-        tensor = self._leaky_relu(tensor=tensor, name='leaky_relu-2')
+        tensor = self._relu(tensor=tensor, name='leaky_relu-2')
         if self.FULL_PREACTIVATION:
             tensor = self._conv(tensor=tensor, kernel_size=(3, 1), out_chan=out_chan, is_training=is_training,
                                 stride=(strides, 1), dilation=(dilation, 1), name='conv2d-2')
@@ -815,7 +842,7 @@ class ResNetLayers(BasicLayers):
             tensor = self._conv(tensor=tensor, kernel_size=(1, 3), out_chan=out_chan, is_training=is_training, stride=1,
                                 dilation=dilation, name='conv2d-3')
         tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm-3')
-        tensor = self._leaky_relu(tensor=tensor, name='leaky_relu-3')
+        tensor = self._relu(tensor=tensor, name='leaky_relu-3')
         if self.FULL_PREACTIVATION:
             tensor = self._conv(tensor=tensor, kernel_size=(1, 3), out_chan=out_chan, is_training=is_training, stride=1,
                                 dilation=dilation, name='conv2d-3')
@@ -826,7 +853,7 @@ class ResNetLayers(BasicLayers):
         tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm-4')
         if not self.FULL_PREACTIVATION:
             return tensor
-        tensor = self._leaky_relu(tensor=tensor, name='leaky_relu-4')
+        tensor = self._relu(tensor=tensor, name='leaky_relu-4')
         if self.FULL_PREACTIVATION:
             tensor = self._conv(tensor=tensor, kernel_size=(3, 1), out_chan=out_chan, is_training=is_training, stride=1,
                                 dilation=dilation, name='conv2d-4')
@@ -855,7 +882,7 @@ class ResNetLayers(BasicLayers):
             tensor = self._conv(tensor=tensor, kernel_size=1, out_chan=out_chan, is_training=is_training,
                                 stride=strides, name='conv2d-1')
         tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm-1')
-        tensor = self._leaky_relu(tensor=tensor, name='leaky_relu-1')
+        tensor = self._relu(tensor=tensor, name='leaky_relu-1')
         if self.FULL_PREACTIVATION:
             tensor = self._conv(tensor=tensor, kernel_size=1, out_chan=out_chan, is_training=is_training,
                                 stride=strides, name='conv2d-1')
@@ -864,7 +891,7 @@ class ResNetLayers(BasicLayers):
             tensor = self._conv(tensor=tensor, kernel_size=(1, 3), out_chan=out_chan, is_training=is_training, stride=1,
                                 dilation=(1, dilation), name='conv2d-2')
         tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm-2')
-        tensor = self._leaky_relu(tensor=tensor, name='leaky_relu-2')
+        tensor = self._relu(tensor=tensor, name='leaky_relu-2')
         if self.FULL_PREACTIVATION:
             tensor = self._conv(tensor=tensor, kernel_size=(1, 3), out_chan=out_chan, is_training=is_training, stride=1,
                                 dilation=(1, dilation), name='conv2d-2')
@@ -873,7 +900,7 @@ class ResNetLayers(BasicLayers):
             tensor = self._conv(tensor=tensor, kernel_size=(3, 1), out_chan=out_chan, is_training=is_training, stride=1,
                                 dilation=(dilation, 1), name='conv2d-3')
         tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm-3')
-        tensor = self._leaky_relu(tensor=tensor, name='leaky_relu-3')
+        tensor = self._relu(tensor=tensor, name='leaky_relu-3')
         if self.FULL_PREACTIVATION:
             tensor = self._conv(tensor=tensor, kernel_size=(3, 1), out_chan=out_chan, is_training=is_training, stride=1,
                                 dilation=(dilation, 1), name='conv2d-3')
@@ -884,7 +911,7 @@ class ResNetLayers(BasicLayers):
         tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm-4')
         if not self.FULL_PREACTIVATION:
             return tensor
-        tensor = self._leaky_relu(tensor=tensor, name='leaky_relu-4')
+        tensor = self._relu(tensor=tensor, name='leaky_relu-4')
         if self.FULL_PREACTIVATION:
             tensor = self._conv(tensor=tensor, kernel_size=1, out_chan=4 * out_chan, is_training=is_training, stride=1,
                                 name='conv2d-4')
@@ -911,7 +938,7 @@ class ResNetLayers(BasicLayers):
         shortcut = self._batch_normalization(tensor=shortcut, is_training=is_training)
         if not self.FULL_PREACTIVATION:
             return shortcut
-        shortcut = self._leaky_relu(tensor=shortcut)
+        shortcut = self._relu(tensor=shortcut)
         if self.FULL_PREACTIVATION:
             shortcut = self._conv(tensor=shortcut, kernel_size=1, out_chan=channels, is_training=is_training,
                                   stride=strides)

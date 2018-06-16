@@ -45,23 +45,10 @@ class ResNet(BaseModel):
             depth_count = 0
             for i, layers in enumerate(RESNET_REPETITIONS):
                 for j in range(layers):
-                    # if j != 0:
-                    #     depth_count = depth_count + 1
-                    # if i == 2 and j == 0:
-                    #     image_snapshot = image
-                    # if layers == RESNET_REPETITIONS[-1]:
-                    #     image = resnet.bottleneck_dilation(image, layer_name='conv%d_%d' % (i + 2, j + 1),
-                    #                                        first_layer=(j == 0), out_chan=RESNET_FEATURES[i],
-                    #                                        is_training=self.is_training,
-                    #                                        depth=(depth_count, RESNET_IDENTITY_LAYERS))
-                    # else:
-                    image = resnet.bottleneck(image, layer_name='conv%d_%d' % (i + 2, j + 1),
-                                              first_layer=(j == 0), out_chan=RESNET_FEATURES[i],
-                                              is_training=self.is_training)
-                                              #depth=(depth_count, RESNET_IDENTITY_LAYERS))
+                    image = resnet.vanilla(image, layer_name='conv%d_%d' % (i + 2, j + 1),
+                                           first_layer=(j == 0), out_chan=RESNET_FEATURES[i],
+                                           is_training=self.is_training)
 
-            # image = resnet._max_pool(image, pool=(4, 4))
-            # image = resnet.last_layer(image, is_training=self.is_training, use_4k=USE_4K, use_upconv=USE_UPCONVOLUTION)
             self.summary.histogram('last_layer', image)
 
         with tf.variable_scope('flatten'):
