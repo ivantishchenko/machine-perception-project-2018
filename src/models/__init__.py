@@ -8,9 +8,8 @@
 
 # __all__ = ('ExampleNet', 'VGG16', 'AlexNet', 'MnistNet', 'DenseNet')
 
-# HelloWorld Ivan
-
 from .example import ExampleNet
-from .ivan import NewModel
 from .cpm import Glover
-__all__ = ('ExampleNet', 'NewModel', 'Glover')
+from .dressnet import ResNet
+from .inceptionresnet import IncResNet
+__all__ = ('ExampleNet', 'Glover', 'ResNet', 'IncResNet')

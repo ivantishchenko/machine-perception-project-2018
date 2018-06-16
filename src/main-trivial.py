@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Main script for training a model for gaze estimation."""
+"""Main script for training a model for hand joint recognition."""
 import argparse
-
 import coloredlogs
 import tensorflow as tf
 
+# HYPER PARAMETER TUNINGS HERE
+BATCHSIZE = 32
+EPOCHS = 25
 
 if __name__ == '__main__':
 
@@ -25,37 +27,26 @@ if __name__ == '__main__':
     with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as session:
 
         # Declare some parameters
-        batch_size = 32
+        batch_size = BATCHSIZE
 
         # Define model
         from datasources import HDF5Source
-        from models import NewModel
-        model = NewModel(
-            # Tensorflow session
+        from models import TrivialNet
+        model = TrivialNet(
             # Note: The same session must be used for the model and the data sources.
             session,
 
-            # The learning schedule describes in which order which part of the network should be
-            # trained and with which learning rate.
-            #
-            # A standard network would have one entry (dict) in this argument where all model
-            # parameters are optimized. To do this, you must specify which variables must be
-            # optimized and this is done by specifying which prefixes to look for.
-            # The prefixes are defined by using `tf.variable_scope`.
-            #
-            # The loss terms which can be specified depends on model specifications, specifically
-            # the `loss_terms` output of `BaseModel::build_model`.
             learning_schedule=[
                 {
                     'loss_terms_to_optimize': {
-                        'kp_2D_mse': ['conv', 'fc'],
+                        'kp_loss_mse': ['keypoints', 'flatten', 'loss_calculation'],
                     },
-                    'metrics': ['kp_2D_mse'],
+                    'metrics': ['kp_loss_mse', 'kp_accuracy'],
                     'learning_rate': 1e-4,
                 },
             ],
 
-            test_losses_or_metrics=['kp_2D_mse'],
+            test_losses_or_metrics=['kp_loss_mse', 'kp_accuracy'],
 
             # Data sources for training and testing.
             train_data={
@@ -67,14 +58,13 @@ if __name__ == '__main__':
                     min_after_dequeue=2000,
                 ),
             },
-            # If you want to validate your model, split the training set into
-            # training and validation and uncomment this line
+
             # test_data={
             #     'real': HDF5Source(
             #         session,
             #         batch_size,
-            #         hdf_path='../datasets/validation.h5',
-            #         keys_to_use=['test'],
+            #         hdf_path='../datasets/dataset.h5',
+            #         keys_to_use=['validate'],
             #         testing=True,
             #     ),
             # },
@@ -82,7 +72,7 @@ if __name__ == '__main__':
 
         # Train this model for a set number of epochs
         model.train(
-            num_epochs=50,
+            num_epochs=EPOCHS,
         )
 
         # Test for Kaggle submission

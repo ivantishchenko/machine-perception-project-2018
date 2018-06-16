@@ -14,7 +14,15 @@ ACCURACY_DISTANCE = 2
 
 
 class Glover(BaseModel):
-    """ Network performing 3D pose estimation of a human hand from a single color image. """
+    """
+    Network performing 3D pose estimation of a human hand from a single color image.
+    Inspired by:
+    https://github.com/shihenw/convolutional-pose-machines-release/tree/master/model/_trained_MPI
+        no downscaling layer from this one
+
+    Additional interesting resources:
+    https://github.com/ildoonet/tf-pose-estimation/blob/master/src/network_cmu.py
+    """
     def build_model(self, data_sources: Dict[str, BaseDataSource], mode: str):
         """Build model."""
         data_source = next(iter(data_sources.values()))
@@ -30,12 +38,13 @@ class Glover(BaseModel):
                                    dtype=(
                                    [tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
                                     tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
-                                    tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32],
+                                    tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32, tf.float32,
+                                    tf.float32],
                                    tf.float32),
                                    back_prop=False)
             return tf.transpose(tf.stack(heatmap), perm=[1, 0, 2, 3])
 
-        # hm_gt = generate_heatmaps(keypoints, HEATMAP_SIZE)
+        hm_gt = generate_heatmaps(keypoints, HEATMAP_SIZE)
         # hm_gt_fs = generate_heatmaps(keypoints, CROP_SIZE)
 
         layers = bl(self.summary, True)
@@ -47,6 +56,8 @@ class Glover(BaseModel):
             scoremap_list = []
 
             image = rgb_image
+            pooled_image = tf.layers.average_pooling2d(image, pool_size=9, strides=8, data_format='channels_first',
+                                                       padding='same', name='average_pool')
             for block_id, (layer_num, chan_num, pool) in enumerate(zip(layers_per_block, out_chan_list, pool_list), 1):
                 for layer_id in range(layer_num):
                     image = layers.conv_relu(image, 'conv%d_%d' % (block_id, layer_id + 1), kernel_size=3,
@@ -62,75 +73,86 @@ class Glover(BaseModel):
 
             image = layers.conv_relu(downsampled_map, 'conv5_1_CPM', kernel_size=1, out_chan=512,
                                      is_training=self.is_training)
-            scoremap = layers._conv(image, kernel_size=1, out_chan=KEYPOINT_COUNT, is_training=self.is_training,
+            scoremap = layers._conv(image, kernel_size=1, out_chan=KEYPOINT_COUNT+1, is_training=self.is_training,
                                     name='conv5_P')
             scoremap_list.append(scoremap)
 
             # iterate recurrent part a couple of times
             layers_per_recurrent_unit = 5
-            num_recurrent_units = 5
+            num_recurrent_units = 3
             offset = 6
             for pass_id in range(num_recurrent_units):
-                image = tf.concat([scoremap_list[-1], downsampled_map], 1)
+                image = tf.concat([scoremap_list[-1], downsampled_map, pooled_image], 1)
                 for rec_id in range(layers_per_recurrent_unit):
                     image = layers.conv_relu(image, 'conv%d_%d_CPM' % (pass_id + offset, rec_id + 1), kernel_size=5,
                                              out_chan=128, is_training=self.is_training)
                 image = layers.conv_relu(image, 'conv%d_%d_CPM' % (pass_id + offset, layers_per_recurrent_unit + 1),
                                          kernel_size=1, out_chan=128, is_training=self.is_training)
-                scoremap = layers._conv(image, kernel_size=1, out_chan=KEYPOINT_COUNT, is_training=self.is_training,
+                scoremap = layers._conv(image, kernel_size=1, out_chan=KEYPOINT_COUNT+1, is_training=self.is_training,
                                         name='conv%d_P' % (pass_id + offset))
                 scoremap_list.append(scoremap)
 
-        with tf.variable_scope('flatten'):
-            result = layers.pred_layer(scoremap_list[-1], is_training=self.is_training)
+        # with tf.variable_scope('flatten'):
+        #     result = layers.pred_layer(scoremap_list[-1], is_training=self.is_training)
+        #
+        # with tf.variable_scope('loss_calculation'):
+        #     # Include all keypoints for metrics. These are rougher scores.
+        #     loss_mse = tf.reduce_mean(tf.squared_difference(keypoints, result))
+        #     corr = tf.count_nonzero(tf.less_equal(tf.squared_difference(keypoints, result), ACCURACY_DISTANCE))
+        #     precision = corr / (keypoints.shape[0] * keypoints.shape[1] * keypoints.shape[2])
+        #
+        #     # Only include visible keypoints for metrics. These are nicer scores overall.
+        #     count_vis = tf.count_nonzero(tf.multiply(keypoints, is_visible))
+        #     loss_mse_vis = tf.multiply(tf.squared_difference(keypoints, result), is_visible)
+        #     loss_mse_vis = tf.reduce_sum(tf.truediv(loss_mse_vis, tf.cast(count_vis, dtype=tf.float32)))
+        #     corr_vis = tf.count_nonzero(tf.less_equal(tf.multiply(tf.squared_difference(keypoints, result), is_visible),
+        #                                               ACCURACY_DISTANCE))
+        #     precision_visible = tf.divide(corr_vis, count_vis)
+
+        with tf.variable_scope('upscale_pred'):
+            pred_upscale = tf.transpose(scoremap_list[-1], [0, 2, 3, 1])
+            pred_upscale = tf.image.resize_images(pred_upscale, (CROP_SIZE, CROP_SIZE), method=tf.image.ResizeMethod.BICUBIC, align_corners=True)
+            pred_upscale = tf.transpose(pred_upscale, [0, 3, 1, 2])
+
+        with tf.variable_scope('point_pred'):
+            input = pred_upscale
+
+            def image_max(t):
+                t = tf.reshape(t, [-1])
+                idx = tf.argmax(t)
+                x = tf.cast(idx % CROP_SIZE, dtype=tf.float32)
+                y = tf.cast(idx // CROP_SIZE, dtype=tf.float32)
+                return x, y
+
+            def outer(t):
+                res = tf.map_fn(lambda j: image_max(j), tf.nn.embedding_lookup(t, np.array(range(input.shape[1]))),
+                                dtype=(tf.float32, tf.float32), back_prop=False)
+                return tf.stack([res[0], res[1]], axis=1)
+
+            pred_points = tf.map_fn(lambda i: outer(i), tf.nn.embedding_lookup(input, np.array(range(input.shape[0]))),
+                                    dtype=tf.float32, back_prop=False)
+            result = pred_points
 
         with tf.variable_scope('loss_calculation'):
+            loss_filter = 0
+            for i in range(len(scoremap_list)):
+                loss_filter += (HEATMAP_SIZE ** 2) * tf.reduce_mean(tf.squared_difference(hm_gt, scoremap_list[i]))
             # Include all keypoints for metrics. These are rougher scores.
-            loss_mse = tf.reduce_mean(tf.squared_difference(keypoints, result))
-            corr = tf.count_nonzero(tf.less_equal(tf.squared_difference(keypoints, result), ACCURACY_DISTANCE))
+            loss_mse = tf.reduce_mean(tf.squared_difference(keypoints, result[:, :-1, :]))
+            corr = tf.count_nonzero(tf.less_equal(tf.squared_difference(keypoints, result[:, :-1, :]), ACCURACY_DISTANCE))
             precision = corr / (keypoints.shape[0] * keypoints.shape[1] * keypoints.shape[2])
 
             # Only include visible keypoints for metrics. These are nicer scores overall.
             count_vis = tf.count_nonzero(tf.multiply(keypoints, is_visible))
-            loss_mse_vis = tf.multiply(tf.squared_difference(keypoints, result), is_visible)
+            loss_mse_vis = tf.multiply(tf.squared_difference(keypoints, result[:, :-1, :]), is_visible)
             loss_mse_vis = tf.reduce_sum(tf.truediv(loss_mse_vis, tf.cast(count_vis, dtype=tf.float32)))
-            corr_vis = tf.count_nonzero(tf.less_equal(tf.multiply(tf.squared_difference(keypoints, result), is_visible),
+            corr_vis = tf.count_nonzero(tf.less_equal(tf.multiply(tf.squared_difference(keypoints, result[:, :-1, :]),
+                                                                  is_visible),
                                                       ACCURACY_DISTANCE))
             precision_visible = tf.divide(corr_vis, count_vis)
 
-        # with tf.variable_scope('upscale_pred'):
-        #     pred_upscale = tf.transpose(scoremap_list[-1], [0, 2, 3, 1])
-        #     pred_upscale = tf.image.resize_images(pred_upscale, (CROP_SIZE, CROP_SIZE), method=tf.image.ResizeMethod.BICUBIC, align_corners=True)
-        #     pred_upscale = tf.transpose(pred_upscale, [0, 3, 1, 2])
-        #
-        # with tf.variable_scope('point_pred'):
-        #     input = pred_upscale
-        #
-        #     def image_max(t):
-        #         t = tf.reshape(t, [-1])
-        #         idx = tf.argmax(t)
-        #         x = tf.cast(idx % CROP_SIZE, dtype=tf.float32)
-        #         y = tf.cast(idx // CROP_SIZE, dtype=tf.float32)
-        #         return x, y
-        #
-        #     def outer(t):
-        #         res = tf.map_fn(lambda j: image_max(j), tf.nn.embedding_lookup(t, np.array(range(input.shape[1]))),
-        #                         dtype=(tf.float32, tf.float32), back_prop=False)
-        #         return tf.stack([res[0], res[1]], axis=1)
-        #
-        #     pred_points = tf.map_fn(lambda i: outer(i), tf.nn.embedding_lookup(input, np.array(range(input.shape[0]))),
-        #                             dtype=tf.float32, back_prop=False)
-        #
-        # with tf.variable_scope('loss_calculation'):
-        #     loss_filter = (HEATMAP_SIZE ** 2) * tf.losses.mean_squared_error(hm_gt, scoremap_list[-1])
-        #     loss_scaled = tf.losses.mean_squared_error(keypoints, pred_points)
-        #
-        # loss_terms = {  # To optimize
-        #     'kp_mse_filter': loss_filter,
-        #     'kp_mse_scaled': loss_scaled
-        # }
-
         loss_terms_flattened = {  # To optimize
+            'kp_loss_filter': loss_filter,
             'kp_loss_mse': loss_mse,
             'kp_accuracy': precision,
             'kp_loss_mse_vis': loss_mse_vis,
@@ -138,4 +160,4 @@ class Glover(BaseModel):
         }
 
         # Return output_tensor, loss_tensor and metrics (not used)
-        return {'kp_2D': result}, loss_terms_flattened, {}
+        return {'kp_2D': result[:, :-1, :]}, loss_terms_flattened, {}

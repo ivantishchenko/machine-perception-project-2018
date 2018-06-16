@@ -61,7 +61,6 @@ class LiveTester(object):
 
                 self.time.start('full test')
                 for i in range(num_batches):
-                    # logger.debug('Tested on %03d/%03d batches.' % (i + 1, num_batches))
                     output = self._tensorflow_session.run(
                         fetches=fetches,
                         feed_dict={
@@ -142,4 +141,3 @@ class LiveTester(object):
         """
         assert self._copy_variables_to_test_model_op is not None
         self._tensorflow_session.run(self._copy_variables_to_test_model_op)
-        logger.debug('Copied over trainable model parameters for testing.')

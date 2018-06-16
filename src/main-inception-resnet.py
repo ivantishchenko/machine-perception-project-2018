@@ -6,8 +6,7 @@ import tensorflow as tf
 
 # HYPER PARAMETER TUNINGS HERE
 BATCHSIZE = 8
-EPOCHS = 40
-
+EPOCHS = 108
 
 if __name__ == '__main__':
 
@@ -24,33 +23,32 @@ if __name__ == '__main__':
 
     # Initialize Tensorflow session
     tf.logging.set_verbosity(tf.logging.INFO)
-    gpu_options = tf.GPUOptions(allow_growth=True)
-    # gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.8)
-    with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as session:
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
+    # config.log_device_placement = True
+    with tf.Session(config=config) as session:
 
         # Declare some parameters
         batch_size = BATCHSIZE
 
         # Define model
         from datasources import HDF5Source
-        from models import Glover
-        model = Glover(
+        from models import IncResNet
+        model = IncResNet(
             # Note: The same session must be used for the model and the data sources.
             session,
 
             learning_schedule=[
                 {
                     'loss_terms_to_optimize': {
-                        # 'kp_loss_mse': ['posenet', 'flatten', 'loss_calculation'],
-                        'kp_loss_filter': ['posenet', 'upscale_pred', 'point_pred', 'loss_calculation'],
+                        'kp_loss_mse': ['inception-resnet', 'flatten', 'loss_calculation'],
                     },
-                    # 'metrics': ['kp_loss_mse', 'kp_accuracy', 'kp_loss_mse_vis', 'kp_accuracy_vis'],
-                    'metrics': ['kp_loss_filter', 'kp_loss_mse', 'kp_accuracy', 'kp_loss_mse_vis', 'kp_accuracy_vis'],
+                    'metrics': ['kp_loss_mse', 'kp_accuracy', 'kp_loss_mse_vis', 'kp_accuracy_vis'],
                     'learning_rate': 1e-4,
                 },
             ],
 
-            test_losses_or_metrics=['kp_loss_filter', 'kp_loss_mse', 'kp_accuracy', 'kp_loss_mse_vis', 'kp_accuracy_vis'],
+            test_losses_or_metrics=['kp_loss_mse', 'kp_accuracy', 'kp_loss_mse_vis', 'kp_accuracy_vis'],
 
             # Data sources for training and testing.
             train_data={

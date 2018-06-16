@@ -33,7 +33,20 @@ class BasicLayers(object):
             self.summary.histogram(name + '/layer', layer)
         return layer
 
-    def _conv(self, tensor, kernel_size, out_chan, is_training, stride=1, dilation=1, name='conv2d'):
+    def _relu(self, tensor, name='leaky_relu'):
+        """
+        Apply a relu activation layer to the input tensor.
+        :param tensor: Tensor which to apply relu on
+        :param name: Name of this layer
+        :return: Application of relu on the layer
+
+        """
+        layer = tf.nn.relu(tensor, name=name)
+        if self.visualize:
+            self.summary.histogram(name + '/layer', layer)
+        return layer
+
+    def _conv(self, tensor, kernel_size, out_chan, is_training, stride=1, dilation=1, padding='same', name='conv2d'):
         """
         Apply a convolutional layer to the input tensor.
         :param tensor: Tensor which to convolve
@@ -45,14 +58,13 @@ class BasicLayers(object):
         :param name: Name of this layer
         :return: Application of convolution on the layer
         """
-
-        def __conv(bool_training):
+        def __conv(bool_training=True):
             return tf.layers.conv2d(
                 inputs=tensor,
                 filters=out_chan,
                 kernel_size=kernel_size,
                 strides=stride,
-                padding='same',
+                padding=padding,
                 data_format='channels_first',
                 dilation_rate=dilation,
                 activation=None,
@@ -66,23 +78,24 @@ class BasicLayers(object):
                 bias_constraint=None,
                 trainable=bool_training,
                 name=name,
-                reuse=None)
+                reuse=tf.AUTO_REUSE
+            )
 
-        layer_training = __conv(True)
-        layer_inference = __conv(False)
-        layer = tf.cond(is_training, lambda: layer_training, lambda: layer_inference)
+        layer = __conv()
+        if isinstance(kernel_size, tuple):
+            return layer
         if self.visualize:
             # self.summary.filters(name, layer)
             # self.summary.feature_maps(name, layer)
             # self.summary.histogram(name + '/layer', layer)
             with tf.variable_scope(name, reuse=True):
-                kernel = tf.get_variable('kernel')
-                bias = tf.get_variable('bias')
+                kernel = tf.get_variable('kernel', [kernel_size, kernel_size, tensor.shape[1], out_chan])
+                bias = tf.get_variable('bias', [out_chan])
                 self.summary.histogram(name + '/kernel', kernel)
                 self.summary.histogram(name + '/bias', bias)
         return layer
 
-    def _upconv(self, tensor, kernel_size, out_chan, is_training, stride=1, name='conv2d_t'):
+    def _upconv(self, tensor, kernel_size, out_chan, is_training, stride=1, padding='same', name='conv2d_t'):
         """
         Apply a transpose-convolution layer to the input tensor.
         Note: Play around with the stride, then blowing it up, but not kernel sizes
@@ -94,14 +107,13 @@ class BasicLayers(object):
         :param name: Name of this layer
         :return: Application of transpose-convolution on the layer
         """
-
-        def __upconv(bool_training):
+        def __upconv(bool_training=True):
             return tf.layers.conv2d_transpose(
                 inputs=tensor,
                 filters=out_chan,
                 kernel_size=kernel_size,
                 strides=stride,
-                padding='same',
+                padding=padding,
                 data_format='channels_first',
                 activation=None,
                 use_bias=True,
@@ -114,12 +126,10 @@ class BasicLayers(object):
                 bias_constraint=None,
                 trainable=bool_training,
                 name=name,
-                reuse=None
+                reuse=tf.AUTO_REUSE
             )
 
-        layer_training = __upconv(True)
-        layer_inference = __upconv(False)
-        layer = tf.cond(is_training, lambda: layer_training, lambda: layer_inference)
+        layer = __upconv(True)
         if self.visualize:
             # self.summary.filters(name, layer)
             # self.summary.feature_maps(name, layer)
@@ -131,7 +141,7 @@ class BasicLayers(object):
                 self.summary.histogram(name + '/bias', bias)
         return layer
 
-    def _max_pool(self, tensor, pool=2, stride=2, name='max_pool'):
+    def _max_pool(self, tensor, pool=2, stride=2, padding='same', name='max_pool'):
         """
         Apply a max-pooling on the input tensor.
         :param tensor: Tensor on which to apply max-pooling on
@@ -144,7 +154,7 @@ class BasicLayers(object):
             inputs=tensor,
             pool_size=pool,
             strides=stride,
-            padding='same',
+            padding=padding,
             data_format='channels_first',
             name=name
         )
@@ -161,7 +171,7 @@ class BasicLayers(object):
         :param use_batch_stats: Non-used variable for the moment
         :return: Application of batch-normalization on the layer
         """
-        __momentum = 0.95
+        __momentum = 0.99
         __scale = True
 
         def __official_bn():
@@ -169,7 +179,7 @@ class BasicLayers(object):
                 inputs=tensor,
                 axis=self.CHANNEL_AXIS,
                 momentum=__momentum,
-                epsilon=0.001,
+                epsilon=0.0001,
                 center=True,
                 scale=__scale,
                 beta_initializer=tf.zeros_initializer(),
@@ -180,7 +190,7 @@ class BasicLayers(object):
                 gamma_regularizer=None,
                 beta_constraint=None,
                 gamma_constraint=None,
-                training=is_training,
+                training=True,
                 name=name,
                 reuse=None,
                 renorm=False,
@@ -197,18 +207,18 @@ class BasicLayers(object):
                 decay=__momentum,  # 0.999
                 center=True,
                 scale=__scale,  # False
-                epsilon=0.001,
+                epsilon=0.0001,
                 activation_fn=None,
                 param_initializers=None,
                 param_regularizers=None,
                 updates_collections=None,  # tf.GraphKeys.UPDATE_OPS,
-                is_training=is_training,
+                is_training=True,  # is_training would be more correct but validation performance is strange with it
                 reuse=None,
                 variables_collections=None,
                 outputs_collections=None,
                 trainable=True,
                 batch_weights=None,
-                fused=None,
+                fused=True,
                 data_format='NCHW',  # DATA_FORMAT_NHWC
                 zero_debias_moving_mean=False,
                 scope=None,
@@ -226,13 +236,13 @@ class BasicLayers(object):
             with tf.variable_scope(name, reuse=True):
                 beta = tf.get_variable('beta')
                 self.summary.histogram(name + '/beta', beta)
-                # gamma = tf.get_variable('gamma')
-                # self.summary.histogram(name + '/gamma', gamma)
+                gamma = tf.get_variable('gamma')
+                self.summary.histogram(name + '/gamma', gamma)
                 # The following variables are not of interest really, they stay constant from the looks
-                # moving_mean = tf.get_variable('moving_mean')
-                # moving_variance = tf.get_variable('moving_variance')
-                # self.summary.histogram(name + '/moving_mean', moving_mean)
-                # self.summary.histogram(name + '/moving_variance', moving_variance)
+                moving_mean = tf.get_variable('moving_mean')
+                moving_variance = tf.get_variable('moving_variance')
+                self.summary.histogram(name + '/moving_mean', moving_mean)
+                self.summary.histogram(name + '/moving_variance', moving_variance)
         return layer
 
     def _dropout(self, tensor, is_training, rate=-1., name='dropout'):
@@ -256,9 +266,6 @@ class BasicLayers(object):
             training=is_training,
             name=name
         )
-        print(name)
-        print('\n'.join(str(e) for e in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)))
-        print('==========')
         if self.visualize:
             # self.summary.feature_maps(name, layer)
             self.summary.histogram(name + '/layer', layer)
@@ -269,13 +276,13 @@ class BasicLayers(object):
         Apply a fully connected layer with either custom leaky_relu or requested activation_fn on the input tensor.
         :param tensor: Tensor on which to apply a fully connected layer on
         :param out_chan: Number of output neurons
-        :param activation_fun: Activation function (leaky_relu uses custom leaky relu)
+        :param activation_fun: Activation function ([leaky_]relu uses custom [leaky ]relu)
         :param name: Name of this layer (not used)
         :param is_training: Is this layer in training mode?
         :return: Application of a fully connected layer on the input
         """
 
-        def __fc(bool_training, act_fun):
+        def __fc(bool_training=True, act_fun=None):
             return tf.contrib.layers.fully_connected(
                 inputs=tensor,
                 num_outputs=out_chan,
@@ -293,10 +300,8 @@ class BasicLayers(object):
                 scope=None
             )
 
-        if activation_fun is tf.nn.leaky_relu:
-            layer_training = __fc(True, None)
-            layer_inference = __fc(False, None)
-            layer = tf.cond(is_training, lambda: layer_training, lambda: layer_inference)
+        if activation_fun is tf.nn.leaky_relu or activation_fun is tf.nn.relu:
+            layer = __fc(act_fun=None)
             if self.visualize:
                 # self.summary.feature_maps(name, layer)
                 self.summary.histogram(name + '/layer', layer)
@@ -305,20 +310,21 @@ class BasicLayers(object):
                     biases = tf.get_variable('biases')
                     self.summary.histogram(name + '/weights', weights)
                     self.summary.histogram(name + '/biases', biases)
-            layer = self._leaky_relu(layer)
+            if activation_fun is tf.nn.leaky_relu:
+                layer = self._leaky_relu(layer)
+            else:
+                layer = self._relu(layer)
         else:
-            layer_training = __fc(True, activation_fun)
-            layer_inference = __fc(False, activation_fun)
-            layer = tf.cond(is_training, lambda: layer_training, lambda: layer_inference)
-            print(name)
-            print('\n'.join(str(e) for e in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)))
-            print('==========')
+            layer = __fc(act_fun=activation_fun)
+            # print(name)
+            # print('\n'.join(str(e) for e in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)))
+            # print('==========')
         return layer
 
     def conv_layer(self, in_tensor, layer_name, kernel_size, out_chan, is_training, stride=1, max_pool=False,
                    disable_dropout=True):
         """
-        Wrapper to apply 2d-convolutions with various extra ops (max_pool, leaky_relu, batch_norm, dropout).
+        Wrapper to apply 2d-convolutions with various extra ops (max_pool, relu, batch_norm, dropout).
         :param in_tensor: Tensor on which to apply this wrapper on
         :param layer_name: Name of this layer and related scope
         :param kernel_size: Size of the convolutional kernel (accepts tuple or single int)
@@ -336,7 +342,7 @@ class BasicLayers(object):
                 # maxpool(relu(input)) == relu(maxpool(input)); this ordering is a tiny opt which is not general
                 # https://github.com/tensorflow/tensorflow/issues/3180#issuecomment-288389772
                 tensor = self._max_pool(tensor=tensor)
-            tensor = self._leaky_relu(tensor=tensor)
+            tensor = self._relu(tensor=tensor)
             # https://github.com/ducha-aiki/caffenet-benchmark/blob/master/batchnorm.md
             tensor = self._batch_normalization(tensor=tensor, is_training=is_training)
             if not disable_dropout:
@@ -345,7 +351,7 @@ class BasicLayers(object):
 
     def conv_relu(self, in_tensor, layer_name, kernel_size, out_chan, is_training, stride=1, max_pool=False):
         """
-        Wrapper to apply 2d-convolutions with a select few ops (leaky_relu, max_pool).
+        Wrapper to apply 2d-convolutions with a select few ops (relu, max_pool).
         :param in_tensor: Tensor on which to apply this wrapper on
         :param layer_name: Name of this layer and related scope
         :param kernel_size: Size of the convolutional kernel (accepts tuple or single int)
@@ -358,12 +364,13 @@ class BasicLayers(object):
         with tf.variable_scope(layer_name):
             tensor = self._conv(tensor=in_tensor, kernel_size=kernel_size, out_chan=out_chan, is_training=is_training,
                                 stride=stride)
-            tensor = self._leaky_relu(tensor=tensor)
+            tensor = self._relu(tensor=tensor)
             if max_pool:
                 tensor = self._max_pool(tensor=tensor)
             return tensor
 
-    def fc_relu(self, in_tensor, layer_name, out_chan, is_training, droprate=0.5, disable_dropout=False):
+    def fc_relu(self, in_tensor, layer_name, out_chan, is_training, droprate=0.5, disable_dropout=False,
+                activation_fun=tf.nn.relu):
         """
         Wrapper for a fully connected layer with leaky_relu and default dropout of 0.5
         :param in_tensor: Input tensor on which to apply this wrapper on
@@ -372,36 +379,234 @@ class BasicLayers(object):
         :param droprate: Droprate of the dropout layer
         :param disable_dropout: Disable dropout (usually turned on)
         :param is_training: Is this layer in training mode?
-        :return: Application of a fully connected leaky relu layer with potential dropout
+        :param activation_fun: Activation function after fully connected layer (default is relu)
+        :return: Application of a fully connected relu layer with potential dropout
         """
         with tf.variable_scope(layer_name):
             tensor = self._fully_connected(tensor=in_tensor, out_chan=out_chan, is_training=is_training,
-                                           activation_fun=tf.nn.leaky_relu)
+                                           activation_fun=activation_fun)
             if not disable_dropout:
                 tensor = self._dropout(tensor=tensor, is_training=is_training, rate=droprate)
             return tensor
 
-    def pred_layer(self, in_tensor, is_training):
+    def pred_layer(self, in_tensor, is_training, activation_fun=tf.nn.relu):
+        """
+        Basic prediction layer flattening the input and predicting on 42 neurons.
+        :param in_tensor: Input tensor on which to predict results from
+        :param is_training: Is this layer in training mode?
+        :param activation_fun: Activation function of fully connected layer
+        :return: Application of predictions on the input.
+        """
         with tf.variable_scope('pred'):
             result = tf.contrib.layers.flatten(in_tensor)
-            return self.fc_relu(result, 'fc_relu', out_chan=BasicLayers.KEYPOINTS * 2, is_training=is_training,
-                                disable_dropout=True)
+            result = self.fc_relu(result, 'fc_relu', out_chan=BasicLayers.KEYPOINTS * 2, is_training=is_training,
+                                  disable_dropout=True, activation_fun=activation_fun)
+            return tf.reshape(result, (-1, 21, 2))
 
 
-class ResNetLayers(BasicLayers):
+class InceptionResNetv2(BasicLayers):
     """
-    A helper class to quickly generate different residual networks. The blocks follow the full pre-activation principle.
+    A helper class to quickly generate different Inception/ResNet networks. The blocks can be made to use full
+    preactivation.
     """
-    # http://torch.ch/blog/2016/02/04/resnets.html
-    MINIMAL_LAYERS = 64
+    FULL_PREACTIVATION = False
 
-    def __init__(self, summary, visualize=False):
+    def __init__(self, summary, visualize=False, full_preactivation=False):
         """
         Default constructor.
         :param summary: Summary object to allow logging.
         :param visualize: Enable logging?
         """
         super().__init__(summary, visualize)
+        self.FULL_PREACTIVATION = full_preactivation
+
+    def _cbr(self, in_tensor, kernel_size, out_chan, is_training=True, stride=1, padding='same', name=None):
+        """
+        Helper to generate quick convolutional layers with batch normalization/leaky relu with or without full
+        preactivation.
+        :return:
+        """
+        tensor = in_tensor
+        if not self.FULL_PREACTIVATION:
+            tensor = self._conv(tensor=tensor, kernel_size=kernel_size, out_chan=out_chan,
+                                is_training=is_training, stride=stride, padding=padding, name='conv2d_' + name)
+        tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='bn_' + name)
+        tensor = self._leaky_relu(tensor=tensor, name='lrelu_' + name)
+        if self.FULL_PREACTIVATION:
+            tensor = self._conv(tensor=tensor, kernel_size=kernel_size, out_chan=out_chan,
+                                is_training=is_training, stride=stride, name='conv2d_' + name)
+        return tensor
+
+    def prediction_layer(self, in_tensor, is_training):
+        """
+        A simple prediction layer for Inception-ResNets.
+        :param in_tensor: Tensor from which to predict results from.
+        :param is_training: Is this layer in training mode?
+        :return: 21 predictions of (x, y) tuples for an arbitrary amount of batches.
+        """
+        with tf.variable_scope('resnet_pred'):
+            return self.pred_layer(in_tensor, is_training, activation_fun=tf.nn.leaky_relu)
+
+    def stem(self, in_tensor, is_training):
+        with tf.variable_scope("Stem"):
+            tensor = in_tensor
+            tensor = self._cbr(tensor, kernel_size=3, out_chan=32, is_training=is_training, stride=2, padding='valid', name='0')
+            tensor = self._cbr(tensor, kernel_size=3, out_chan=32, is_training=is_training, padding='valid', name='1')
+            tensor = self._cbr(tensor, kernel_size=3, out_chan=64, is_training=is_training, name='2')
+            tensor1 = self._cbr(tensor, kernel_size=3, out_chan=96, is_training=is_training, stride=2, padding='valid', name='3a')
+            tensor2 = self._max_pool(tensor, pool=3, stride=2, padding='valid', name='3b')
+            tensor = tf.concat([tensor1, tensor2], axis=1)
+            tensor1 = self._cbr(tensor, kernel_size=1, out_chan=64, is_training=is_training, name='4a0')
+            tensor1 = self._cbr(tensor1, kernel_size=(5, 1), out_chan=64, is_training=is_training, name='4a1')
+            tensor1 = self._cbr(tensor1, kernel_size=(1, 5), out_chan=64, is_training=is_training, name='4a2')
+            tensor1 = self._cbr(tensor1, kernel_size=3, out_chan=96, is_training=is_training, padding='valid', name='4a3')
+            tensor2 = self._cbr(tensor, kernel_size=1, out_chan=64, is_training=is_training, name='4b0')
+            tensor2 = self._cbr(tensor2, kernel_size=3, out_chan=96, is_training=is_training, padding='valid', name='4b1')
+            tensor = tf.concat([tensor1, tensor2], axis=1)
+            # tensor1 = self._max_pool(tensor, pool=3, stride=2, padding='valid', name='5a')
+            tensor1 = self._cbr(tensor, kernel_size=(3, 1), out_chan=192, is_training=is_training, name='5a0')
+            tensor1 = self._cbr(tensor1, kernel_size=(3, 1), out_chan=192, is_training=is_training, name='5a1')
+            tensor2 = self._cbr(tensor, kernel_size=3, out_chan=192, is_training=is_training, name='5b0')
+            tensor = tf.concat([tensor1, tensor2], axis=1)
+            return tensor
+
+    def block16(self, in_tensor, is_training, name):
+        with tf.variable_scope("Inception-resnet-A" + name):
+            tensor = in_tensor
+            shortcut = in_tensor
+            tensor1 = self._cbr(tensor, kernel_size=1, out_chan=32, is_training=is_training, name='a0')
+            tensor1 = self._cbr(tensor1, kernel_size=3, out_chan=48, is_training=is_training, name='a1')
+            tensor1 = self._cbr(tensor1, kernel_size=3, out_chan=64, is_training=is_training, name='a2')
+            tensor2 = self._cbr(tensor, kernel_size=1, out_chan=32, is_training=is_training, name='b0')
+            tensor2 = self._cbr(tensor2, kernel_size=3, out_chan=32, is_training=is_training, name='b1')
+            tensor3 = self._cbr(tensor, kernel_size=1, out_chan=32, is_training=is_training, name='c0')
+            tensor = tf.concat([tensor1, tensor2, tensor3], axis=1)
+            tensor = self._conv(tensor, kernel_size=1, out_chan=384, is_training=is_training)
+            tensor = tf.multiply(tensor, 0.17)
+            tensor = tf.add(tensor, shortcut)
+            tensor = self._leaky_relu(tensor)
+            return tensor
+
+    def block7(self, in_tensor, is_training):
+        with tf.variable_scope("Reduction-A"):
+            tensor = in_tensor
+            tensor1 = self._cbr(tensor, kernel_size=1, out_chan=256, is_training=is_training, name='a0')
+            tensor1 = self._cbr(tensor1, kernel_size=3, out_chan=256, is_training=is_training, name='a1')
+            tensor1 = self._cbr(tensor1, kernel_size=3, out_chan=384, is_training=is_training, stride=2, padding='valid', name='a2')
+            tensor2 = self._cbr(tensor, kernel_size=3, out_chan=384, is_training=is_training, stride=2, padding='valid', name='b0')
+            tensor3 = self._max_pool(tensor, pool=3, stride=2, padding='valid', name='maxpool_c0')
+            tensor = tf.concat([tensor1, tensor2, tensor3], axis=1)
+            return tensor
+
+    def block17(self, in_tensor, is_training, name):
+        with tf.variable_scope("Inception-resnet-B" + name):
+            tensor = in_tensor
+            shortcut = in_tensor
+            tensor1 = self._cbr(tensor, kernel_size=1, out_chan=128, is_training=is_training, name='a0')
+            tensor1 = self._cbr(tensor1, kernel_size=(1, 3), out_chan=160, is_training=is_training, name='a1')
+            tensor1 = self._cbr(tensor1, kernel_size=(3, 1), out_chan=192, is_training=is_training, name='a2')
+            tensor2 = self._cbr(tensor, kernel_size=1, out_chan=192, is_training=is_training, name='b0')
+            tensor = tf.concat([tensor1, tensor2], axis=1)
+            tensor = self._conv(tensor, kernel_size=1, out_chan=in_tensor.shape[1], is_training=is_training)
+            tensor = tf.multiply(tensor, 0.1)
+            tensor = tf.add(tensor, shortcut)
+            tensor = self._leaky_relu(tensor)
+            return tensor
+
+    def block18(self, in_tensor, is_training):
+        with tf.variable_scope("Reduction-B"):
+            tensor = in_tensor
+            tensor1 = self._cbr(tensor, kernel_size=1, out_chan=256, is_training=is_training, name='a0')
+            tensor1 = self._cbr(tensor1, kernel_size=3, out_chan=288, is_training=is_training, name='a1')
+            tensor1 = self._cbr(tensor1, kernel_size=3, out_chan=320, is_training=is_training, stride=2, padding='valid', name='a2')
+            tensor2 = self._cbr(tensor, kernel_size=1, out_chan=256, is_training=is_training, name='b0')
+            tensor2 = self._cbr(tensor2, kernel_size=3, out_chan=288, is_training=is_training, stride=2, padding='valid', name='b1')
+            tensor3 = self._cbr(tensor, kernel_size=1, out_chan=256, is_training=is_training, name='c0')
+            tensor3 = self._cbr(tensor3, kernel_size=3, out_chan=384, is_training=is_training, stride=2, padding='valid', name='c1')
+            tensor4 = self._max_pool(tensor, pool=3, stride=2, padding='valid', name='d0')
+            tensor = tf.concat([tensor1, tensor2, tensor3, tensor4], axis=1)
+            return tensor
+
+    def block19(self, in_tensor, is_training, name):
+        with tf.variable_scope("Inception-resnet-C" + name):
+            tensor = in_tensor
+            shortcut = in_tensor
+            tensor1 = self._cbr(tensor, kernel_size=1, out_chan=192, is_training=is_training, name='a0')
+            tensor1 = self._cbr(tensor1, kernel_size=(1, 3), out_chan=224, is_training=is_training, name='a1')
+            tensor1 = self._cbr(tensor1, kernel_size=(3, 1), out_chan=256, is_training=is_training, name='a2')
+            tensor2 = self._cbr(tensor, kernel_size=1, out_chan=192, is_training=is_training, name='b0')
+            tensor = tf.concat([tensor1, tensor2], axis=1)
+            tensor = self._conv(tensor, kernel_size=1, out_chan=in_tensor.shape[1], is_training=is_training)
+            tensor = tf.multiply(tensor, 0.2)
+            tensor = tf.add(tensor, shortcut)
+            tensor = self._leaky_relu(tensor)
+            return tensor
+
+
+class ResNetLayers(BasicLayers):
+    """
+    A helper class to quickly generate different residual networks. The blocks follow the full pre-activation principle.
+    Additionally stochastic depth can be enabled for each of the building blocks when called using public functions.
+    """
+    # http://torch.ch/blog/2016/02/04/resnets.html
+    MINIMAL_FEATURES = 64
+    FULL_PREACTIVATION = False
+
+    def __init__(self, summary, visualize=False, minimal_features=64, full_preactivation=False):
+        """
+        Default constructor.
+        :param summary: Summary object to allow logging.
+        :param visualize: Enable logging?
+        """
+        super().__init__(summary, visualize)
+        self.MINIMAL_FEATURES = minimal_features
+        self.FULL_PREACTIVATION = full_preactivation
+
+    @staticmethod
+    def _get_survival_rate(depth, survival_last_block=0.5):
+        """
+        Helper function to calculate the survival rate of a block for stochastic depth.
+        https://arxiv.org/abs/1603.09382
+        :param depth: Tuple of (current_depth, total_depth)
+        :param survival_last_block: Survival rate of the last block
+        :return: Survival rate of the current layer
+        """
+        return 1 - (depth[0] / depth[1]) * (1 - survival_last_block)
+
+    def _cbr(self, in_tensor, kernel_size, out_chan, is_training=True, stride=1, padding='same', dilation=1, name=None):
+        """
+        Helper to generate quick convolutional layers with batch normalization/relu with or without full
+        preactivation.
+        :return:
+        """
+        tensor = in_tensor
+        if not self.FULL_PREACTIVATION:
+            tensor = self._conv(tensor=tensor, kernel_size=kernel_size, out_chan=out_chan,
+                                is_training=is_training, stride=stride, padding=padding, dilation=dilation,
+                                name='conv2d-' + name)
+        tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm-' + name)
+        tensor = self._relu(tensor=tensor, name='leaky_relu-' + name)
+        if self.FULL_PREACTIVATION:
+            tensor = self._conv(tensor=tensor, kernel_size=kernel_size, out_chan=out_chan,
+                                is_training=is_training, stride=stride, name='conv2d-' + name)
+        return tensor
+
+    def _tcbr(self, in_tensor, kernel_size, out_chan, is_training=True, stride=1, padding='same', name=None):
+        """
+        Helper to generate quick convolutional layers with batch normalization/relu with or without full
+        preactivation.
+        :return:
+        """
+        tensor = in_tensor
+        if not self.FULL_PREACTIVATION:
+            tensor = self._upconv(tensor=tensor, kernel_size=kernel_size, out_chan=out_chan,
+                                  is_training=is_training, stride=stride, padding=padding, name='conv2d_t-' + name)
+        tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm-' + name)
+        tensor = self._relu(tensor=tensor, name='leaky_relu-' + name)
+        if self.FULL_PREACTIVATION:
+            tensor = self._upconv(tensor=tensor, kernel_size=kernel_size, out_chan=out_chan,
+                                  is_training=is_training, stride=stride, name='conv2d_t-' + name)
+        return tensor
 
     def init_block(self, in_tensor, is_training):
         """
@@ -411,49 +616,109 @@ class ResNetLayers(BasicLayers):
         :return: Application of the initial layer block on the input
         """
         with tf.variable_scope('resnet_init'):
-            tensor = self._conv(tensor=in_tensor, kernel_size=7, out_chan=64, is_training=is_training, stride=2)
+            tensor = self._conv(tensor=in_tensor, kernel_size=5, out_chan=64, is_training=is_training, stride=2)
             tensor = self._batch_normalization(tensor=tensor, is_training=is_training)
-            tensor = self._leaky_relu(tensor=tensor)
+            tensor = self._relu(tensor=tensor)
             tensor = self._max_pool(tensor=tensor, pool=3, stride=2)
             return tensor
 
-    def last_layer(self, in_tensor, is_training, use_4k=False):
+    def last_layer(self, in_tensor, is_training, use_4k=False, use_upconv=False, tensor_other=None, padding='same'):
         """
         Default last layer for all residual networks.
         :param in_tensor: Tensor on which to apply this block on
         :param is_training: Is this layer in training mode?
         :param use_4k: Use an especially wide last layer with 2048 features prior and 4096 post average pooling
+        :param use_upconv: Have a transpose convolution upsampling before average pooling
         :return: Application of the last layer block on the input
         """
-        # TODO: Deconvolution layer?
         with tf.variable_scope('resnet_last'):
+            tensor = in_tensor
             if use_4k:
-                tensor = self._batch_normalization(tensor=in_tensor, is_training=is_training, name='batch_norm-1')
-                tensor = self._leaky_relu(tensor=tensor, name='leaky_relu-1')
-                tensor = self._conv(tensor=tensor, kernel_size=1, out_chan=2048, is_training=is_training, stride=1,
-                                    name='conv2d-1')
+                # tensor = self._cbr(tensor, kernel_size=1, out_chan=2048, is_training=is_training, stride=1, name='0')
+                if not self.FULL_PREACTIVATION:
+                    tensor = self._conv(tensor=tensor, kernel_size=1, out_chan=2048, is_training=is_training, stride=1,
+                                        name='conv2d-1')
+                tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm-1')
+                tensor = self._relu(tensor=tensor, name='leaky_relu-1')
+                if self.FULL_PREACTIVATION:
+                    tensor = self._conv(tensor=tensor, kernel_size=1, out_chan=2048, is_training=is_training, stride=1,
+                                        name='conv2d-1')
                 tensor = tf.layers.average_pooling2d(tensor, pool_size=4, strides=1, data_format='channels_first',
-                                                     padding='same', name='average_pool')
+                                                     padding=padding, name='average_pool')
+                # tensor = self._cbr(tensor, kernel_size=1, out_chan=4096, is_training=is_training, stride=1, name='1')
+                if not self.FULL_PREACTIVATION:
+                    tensor = self._conv(tensor, kernel_size=1, out_chan=4096, is_training=is_training, stride=1,
+                                        name='conv2d-2')
                 tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm-2')
-                tensor = self._leaky_relu(tensor=tensor, name='leaky_relu-2')
-                tensor = self._conv(tensor, kernel_size=1, out_chan=4096, is_training=is_training, stride=1,
-                                    name='conv2d-2')
+                tensor = self._relu(tensor=tensor, name='leaky_relu-2')
+                if self.FULL_PREACTIVATION:
+                    tensor = self._conv(tensor, kernel_size=1, out_chan=4096, is_training=is_training, stride=1,
+                                        name='conv2d-2')
                 return self._dropout(tensor=tensor, is_training=is_training, name='dropout-2')
+            elif use_upconv:
+                # tensor = self._tcbr(tensor, kernel_size=3, out_chan=self.KEYPOINTS, is_training=is_training, stride=2,
+                #                     name='0')
+                if not self.FULL_PREACTIVATION:
+                    tensor = self._upconv(tensor=tensor, kernel_size=3, out_chan=self.KEYPOINTS,
+                                          is_training=is_training, stride=2, name='conv2d_t')
+                tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm')
+                tensor = self._relu(tensor=tensor, name='leaky_relu')
+                if self.FULL_PREACTIVATION:
+                    tensor = self._upconv(tensor=tensor, kernel_size=3, out_chan=self.KEYPOINTS,
+                                          is_training=is_training, stride=2, name='conv2d_t')
+                tensor2 = tensor_other
+                if tensor2 is not None:
+                    # tensor2 = self._cbr(tensor2, kernel_size=1, out_chan=self.KEYPOINTS, is_training=is_training,
+                    #                     stride=1, name='0')
+                    if not self.FULL_PREACTIVATION:
+                        tensor2 = self._conv(tensor=tensor2, kernel_size=1, out_chan=self.KEYPOINTS,
+                                             is_training=is_training, stride=1, name='conv2d')
+                    tensor2 = self._batch_normalization(tensor=tensor2, is_training=is_training, name='batch_norm2')
+                    tensor2 = self._relu(tensor=tensor2, name='leaky_relu2')
+                    if self.FULL_PREACTIVATION:
+                        tensor2 = self._conv(tensor=tensor, kernel_size=1, out_chan=self.KEYPOINTS,
+                                             is_training=is_training, stride=2, name='conv2d')
+                    return tf.add(tensor, tensor2)
+                return tensor
             else:
-                return tf.layers.average_pooling2d(in_tensor, pool_size=4, strides=1, data_format='channels_first',
-                                                   padding='same', name='average_pool')
+                return tf.layers.average_pooling2d(tensor, pool_size=4, strides=1, data_format='channels_first',
+                                                   padding=padding, name='average_pool')
 
-    def prediction_layer(self, in_tensor, is_training, use_4k=False):
-
+    def prediction_layer(self, in_tensor, is_training, use_4k=False, fcnn=False):
+        """
+        A collection of different pre-packaged prediction layers for ResNets.
+        :param in_tensor: Tensor from which to predict results from.
+        :param is_training: Is this layer in training mode?
+        :param use_4k: Complete the especially wide layer approach on the last layer and apply one last conv-layer.
+        :param fcnn: Use a prediction layer similar to AlexNet.
+        :return: 21 predictions of (x, y) tuples for an arbitrary amount of batches.
+        """
         with tf.variable_scope('resnet_pred'):
+            result = in_tensor
             if use_4k:
-                result = self._conv(in_tensor, kernel_size=1, out_chan=BasicLayers.KEYPOINTS * 2,
-                                    is_training=is_training, stride=1)
+                # result = self._cbr(result, kernel_size=1, out_chan=self.KEYPOINTS * 2, is_training=is_training,
+                #                    stride=1, name='0')
+                if not self.FULL_PREACTIVATION:
+                    result = self._conv(tensor=result, kernel_size=1, out_chan=BasicLayers.KEYPOINTS * 2,
+                                        is_training=is_training, stride=1)
                 result = self._batch_normalization(tensor=result, is_training=is_training)
-                result = self._leaky_relu(tensor=result)
+                result = self._relu(tensor=result)
+                if self.FULL_PREACTIVATION:
+                    result = self._conv(tensor=result, kernel_size=1, out_chan=BasicLayers.KEYPOINTS * 2,
+                                        is_training=is_training, stride=1)
+                result = tf.reshape(result, (-1, 21, 2))
+            elif fcnn:
+                result = tf.contrib.layers.flatten(result)
+                result = self.fc_relu(result, 'fc_relu_4096-1', out_chan=4096, is_training=is_training)
+                result = self.fc_relu(result, 'fc_relu_4096-2', out_chan=4096, is_training=is_training)
+
+                result = self.fc_relu(result, 'fc_relu', out_chan=BasicLayers.KEYPOINTS * 2,
+                                      is_training=is_training,
+                                      disable_dropout=True)
+                return tf.reshape(result, (-1, 21, 2))
             else:
-                result = self.pred_layer(in_tensor, is_training)
-            return tf.reshape(result, (-1, 21, 2))
+                result = self.pred_layer(result, is_training)
+            return result
 
     def _vanilla_branch(self, in_tensor, out_chan, is_training, strides=1, dilation=1):
         """
@@ -465,15 +730,30 @@ class ResNetLayers(BasicLayers):
         :param dilation: The dilation rate for both convolutional layers
         :return: Application of a default residual building block branch on the input
         """
-        tensor = self._batch_normalization(tensor=in_tensor, is_training=is_training, name='batch_norm-1')
-        tensor = self._leaky_relu(tensor=tensor, name='leaky_relu-1')
-        tensor = self._conv(tensor=tensor, kernel_size=3, out_chan=out_chan, is_training=is_training, stride=strides,
+        tensor = in_tensor
+        # tensor = self._cbr(tensor, kernel_size=3, out_chan=out_chan, is_training=is_training, stride=strides,
+        #                    dilation=dilation, name='0')
+        # tensor = self._cbr(tensor, kernel_size=3, out_chan=out_chan, is_training=is_training, stride=1,
+        #                    dilation=dilation, name='1')
+        if not self.FULL_PREACTIVATION:
+            tensor = self._conv(tensor=tensor, kernel_size=3, out_chan=out_chan, is_training=is_training, stride=strides,
+                            dilation=dilation, name='conv2d-1')
+        tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm-1')
+        tensor = self._relu(tensor=tensor, name='leaky_relu-1')
+        if self.FULL_PREACTIVATION:
+            tensor = self._conv(tensor=tensor, kernel_size=3, out_chan=out_chan, is_training=is_training, stride=strides,
                             dilation=dilation, name='conv2d-1')
 
+        if not self.FULL_PREACTIVATION:
+            tensor = self._conv(tensor=tensor, kernel_size=3, out_chan=out_chan, is_training=is_training, stride=1,
+                                dilation=dilation, name='conv2d-2')
         tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm-2')
-        tensor = self._leaky_relu(tensor=tensor, name='leaky_relu-2')
-        tensor = self._conv(tensor=tensor, kernel_size=3, out_chan=out_chan, is_training=is_training, stride=1,
-                            dilation=dilation, name='conv2d-2')
+        if not self.FULL_PREACTIVATION:
+            return tensor
+        tensor = self._relu(tensor=tensor, name='leaky_relu-2')
+        if self.FULL_PREACTIVATION:
+            tensor = self._conv(tensor=tensor, kernel_size=3, out_chan=out_chan, is_training=is_training, stride=1,
+                                dilation=dilation, name='conv2d-2')
         return tensor
 
     def _bottleneck_branch(self, in_tensor, out_chan, is_training, strides=1, dilation=1):
@@ -486,20 +766,39 @@ class ResNetLayers(BasicLayers):
         :param dilation: The dilation rate for the center convolutional layer
         :return: Application of a bottleneck residual building block branch on the input
         """
-        tensor = self._batch_normalization(tensor=in_tensor, is_training=is_training, name='batch_norm-1')
-        tensor = self._leaky_relu(tensor=tensor, name='leaky_relu-1')
-        tensor = self._conv(tensor=tensor, kernel_size=1, out_chan=out_chan, stride=strides, is_training=is_training,
-                            name='conv2d-1')
+        tensor = in_tensor
+        # tensor = self._cbr(tensor, kernel_size=1, out_chan=out_chan, is_training=is_training, stride=strides, name='0')
+        # tensor = self._cbr(tensor, kernel_size=3, out_chan=out_chan, is_training=is_training, stride=1,
+        #                    dilation=dilation, name='1')
+        # tensor = self._cbr(tensor, kernel_size=1, out_chan=4*out_chan, is_training=is_training, stride=1, name='2')
+        if not self.FULL_PREACTIVATION:
+            tensor = self._conv(tensor=tensor, kernel_size=1, out_chan=out_chan, stride=strides,
+                                is_training=is_training, name='conv2d-1')
+        tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm-1')
+        tensor = self._relu(tensor=tensor, name='leaky_relu-1')
+        if self.FULL_PREACTIVATION:
+            tensor = self._conv(tensor=tensor, kernel_size=1, out_chan=out_chan, stride=strides,
+                                is_training=is_training, name='conv2d-1')
 
+        if not self.FULL_PREACTIVATION:
+            tensor = self._conv(tensor=tensor, kernel_size=3, out_chan=out_chan, is_training=is_training, stride=1,
+                                dilation=dilation, name='conv2d-2')
         tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm-2')
-        tensor = self._leaky_relu(tensor=tensor, name='leaky_relu-2')
-        tensor = self._conv(tensor=tensor, kernel_size=3, out_chan=out_chan, is_training=is_training, stride=1,
-                            dilation=dilation, name='conv2d-2')
+        tensor = self._relu(tensor=tensor, name='leaky_relu-2')
+        if self.FULL_PREACTIVATION:
+            tensor = self._conv(tensor=tensor, kernel_size=3, out_chan=out_chan, is_training=is_training, stride=1,
+                                dilation=dilation, name='conv2d-2')
 
+        if not self.FULL_PREACTIVATION:
+            tensor = self._conv(tensor=tensor, kernel_size=1, out_chan=4 * out_chan, is_training=is_training, stride=1,
+                                name='conv2d-3')
         tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm-3')
-        tensor = self._leaky_relu(tensor=tensor, name='leaky_relu-2')
-        tensor = self._conv(tensor=tensor, kernel_size=1, out_chan=4 * out_chan, is_training=is_training, stride=1,
-                            name='conv2d-3')
+        if not self.FULL_PREACTIVATION:
+            return tensor
+        tensor = self._relu(tensor=tensor, name='leaky_relu-2')
+        if self.FULL_PREACTIVATION:
+            tensor = self._conv(tensor=tensor, kernel_size=1, out_chan=4 * out_chan, is_training=is_training, stride=1,
+                                name='conv2d-3')
         return tensor
 
     def _inception_branch(self, in_tensor, out_chan, is_training, strides=1, dilation=1):
@@ -513,25 +812,52 @@ class ResNetLayers(BasicLayers):
         :param dilation: The dilation rate for all convolutional layers
         :return: Application of an InceptionNet based approach to a normal residual building block branch on the input
         """
-        tensor = self._batch_normalization(tensor=in_tensor, is_training=is_training, name='batch_norm-1')
-        tensor = self._leaky_relu(tensor=tensor, name='leaky_relu-1')
-        tensor = self._conv(tensor=tensor, kernel_size=(1, 3), out_chan=out_chan, is_training=is_training,
-                            stride=(1, strides), dilation=(1, dilation), name='conv2d-1')
+        tensor = in_tensor
+        # tensor = self._cbr(tensor, kernel_size=(1, 3), out_chan=out_chan, is_training=is_training, stride=(1, strides),
+        #                    dilation=(1, dilation), name='0')
+        # tensor = self._cbr(tensor, kernel_size=(3, 1), out_chan=out_chan, is_training=is_training, stride=(strides, 1),
+        #                    dilation=(dilation, 1), name='1')
+        # tensor = self._cbr(tensor, kernel_size=(1, 3), out_chan=out_chan, is_training=is_training, stride=1,
+        #                    dilation=(1, dilation), name='2')
+        # tensor = self._cbr(tensor, kernel_size=(3, 1), out_chan=out_chan, is_training=is_training, stride=1,
+        #                    dilation=(dilation, 1), name='3')
+        if not self.FULL_PREACTIVATION:
+            tensor = self._conv(tensor=tensor, kernel_size=(1, 3), out_chan=out_chan, is_training=is_training,
+                                stride=(1, strides), dilation=(1, dilation), name='conv2d-1')
+        tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm-1')
+        tensor = self._relu(tensor=tensor, name='leaky_relu-1')
+        if self.FULL_PREACTIVATION:
+            tensor = self._conv(tensor=tensor, kernel_size=(1, 3), out_chan=out_chan, is_training=is_training,
+                                stride=(1, strides), dilation=(1, dilation), name='conv2d-1')
 
+        if not self.FULL_PREACTIVATION:
+            tensor = self._conv(tensor=tensor, kernel_size=(3, 1), out_chan=out_chan, is_training=is_training,
+                                stride=(strides, 1), dilation=(dilation, 1), name='conv2d-2')
         tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm-2')
-        tensor = self._leaky_relu(tensor=tensor, name='leaky_relu-2')
-        tensor = self._conv(tensor=tensor, kernel_size=(3, 1), out_chan=out_chan, is_training=is_training,
-                            stride=(strides, 1), dilation=(dilation, 1), name='conv2d-2')
+        tensor = self._relu(tensor=tensor, name='leaky_relu-2')
+        if self.FULL_PREACTIVATION:
+            tensor = self._conv(tensor=tensor, kernel_size=(3, 1), out_chan=out_chan, is_training=is_training,
+                                stride=(strides, 1), dilation=(dilation, 1), name='conv2d-2')
 
+        if not self.FULL_PREACTIVATION:
+            tensor = self._conv(tensor=tensor, kernel_size=(1, 3), out_chan=out_chan, is_training=is_training, stride=1,
+                                dilation=dilation, name='conv2d-3')
         tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm-3')
-        tensor = self._leaky_relu(tensor=tensor, name='leaky_relu-3')
-        tensor = self._conv(tensor=tensor, kernel_size=(1, 3), out_chan=out_chan, is_training=is_training, stride=1,
-                            dilation=dilation, name='conv2d-3')
+        tensor = self._relu(tensor=tensor, name='leaky_relu-3')
+        if self.FULL_PREACTIVATION:
+            tensor = self._conv(tensor=tensor, kernel_size=(1, 3), out_chan=out_chan, is_training=is_training, stride=1,
+                                dilation=dilation, name='conv2d-3')
 
+        if not self.FULL_PREACTIVATION:
+            tensor = self._conv(tensor=tensor, kernel_size=(3, 1), out_chan=out_chan, is_training=is_training, stride=1,
+                                dilation=dilation, name='conv2d-4')
         tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm-4')
-        tensor = self._leaky_relu(tensor=tensor, name='leaky_relu-4')
-        tensor = self._conv(tensor=tensor, kernel_size=(3, 1), out_chan=out_chan, is_training=is_training, stride=1,
-                            dilation=dilation, name='conv2d-4')
+        if not self.FULL_PREACTIVATION:
+            return tensor
+        tensor = self._relu(tensor=tensor, name='leaky_relu-4')
+        if self.FULL_PREACTIVATION:
+            tensor = self._conv(tensor=tensor, kernel_size=(3, 1), out_chan=out_chan, is_training=is_training, stride=1,
+                                dilation=dilation, name='conv2d-4')
         return tensor
 
     def _bottleneck_inception_branch(self, in_tensor, out_chan, is_training, strides=1, dilation=1):
@@ -546,25 +872,50 @@ class ResNetLayers(BasicLayers):
         :return: Application of an InceptionNet based approach to a bottleneck residual building block branch on the
                  input
         """
-        tensor = self._batch_normalization(tensor=in_tensor, is_training=is_training, name='batch_norm-1')
-        tensor = self._leaky_relu(tensor=tensor, name='leaky_relu-1')
-        tensor = self._conv(tensor=tensor, kernel_size=1, out_chan=out_chan, is_training=is_training, stride=strides,
-                            name='conv2d-1')
+        tensor = in_tensor
+        # tensor = self._cbr(tensor, kernel_size=1, out_chan=out_chan, is_training=is_training, stride=strides, name='0')
+        # tensor = self._cbr(tensor, kernel_size=(1, 3), out_chan=out_chan, is_training=is_training, stride=1,
+        #                    dilation=(1, dilation), name='1')
+        # tensor = self._cbr(tensor, kernel_size=(3, 1), out_chan=out_chan, is_training=is_training, stride=1,
+        #                    dilation=(dilation, 1), name='2')
+        # tensor = self._cbr(tensor, kernel_size=1, out_chan=4*out_chan, is_training=is_training, stride=1, name='3')
+        if not self.FULL_PREACTIVATION:
+            tensor = self._conv(tensor=tensor, kernel_size=1, out_chan=out_chan, is_training=is_training,
+                                stride=strides, name='conv2d-1')
+        tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm-1')
+        tensor = self._relu(tensor=tensor, name='leaky_relu-1')
+        if self.FULL_PREACTIVATION:
+            tensor = self._conv(tensor=tensor, kernel_size=1, out_chan=out_chan, is_training=is_training,
+                                stride=strides, name='conv2d-1')
 
+        if not self.FULL_PREACTIVATION:
+            tensor = self._conv(tensor=tensor, kernel_size=(1, 3), out_chan=out_chan, is_training=is_training, stride=1,
+                                dilation=(1, dilation), name='conv2d-2')
         tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm-2')
-        tensor = self._leaky_relu(tensor=tensor, name='leaky_relu-2')
-        tensor = self._conv(tensor=tensor, kernel_size=(1, 3), out_chan=out_chan, is_training=is_training, stride=1,
-                            dilation=(1, dilation), name='conv2d-2')
+        tensor = self._relu(tensor=tensor, name='leaky_relu-2')
+        if self.FULL_PREACTIVATION:
+            tensor = self._conv(tensor=tensor, kernel_size=(1, 3), out_chan=out_chan, is_training=is_training, stride=1,
+                                dilation=(1, dilation), name='conv2d-2')
 
+        if not self.FULL_PREACTIVATION:
+            tensor = self._conv(tensor=tensor, kernel_size=(3, 1), out_chan=out_chan, is_training=is_training, stride=1,
+                                dilation=(dilation, 1), name='conv2d-3')
         tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm-3')
-        tensor = self._leaky_relu(tensor=tensor, name='leaky_relu-3')
-        tensor = self._conv(tensor=tensor, kernel_size=(3, 1), out_chan=out_chan, is_training=is_training, stride=1,
-                            dilation=(dilation, 1), name='conv2d-3')
+        tensor = self._relu(tensor=tensor, name='leaky_relu-3')
+        if self.FULL_PREACTIVATION:
+            tensor = self._conv(tensor=tensor, kernel_size=(3, 1), out_chan=out_chan, is_training=is_training, stride=1,
+                                dilation=(dilation, 1), name='conv2d-3')
 
+        if not self.FULL_PREACTIVATION:
+            tensor = self._conv(tensor=tensor, kernel_size=1, out_chan=4 * out_chan, is_training=is_training, stride=1,
+                                name='conv2d-4')
         tensor = self._batch_normalization(tensor=tensor, is_training=is_training, name='batch_norm-4')
-        tensor = self._leaky_relu(tensor=tensor, name='leaky_relu-4')
-        tensor = self._conv(tensor=tensor, kernel_size=1, out_chan=4 * out_chan, is_training=is_training, stride=1,
-                            name='conv2d-4')
+        if not self.FULL_PREACTIVATION:
+            return tensor
+        tensor = self._relu(tensor=tensor, name='leaky_relu-4')
+        if self.FULL_PREACTIVATION:
+            tensor = self._conv(tensor=tensor, kernel_size=1, out_chan=4 * out_chan, is_training=is_training, stride=1,
+                                name='conv2d-4')
         return tensor
 
     def _shortcut(self, in_tensor, out_chan, is_bottleneck, is_training, strides=1):
@@ -581,13 +932,20 @@ class ResNetLayers(BasicLayers):
             channels = 4 * out_chan
         else:
             channels = out_chan
-        shortcut = self._batch_normalization(tensor=in_tensor, is_training=is_training)
-        shortcut = self._leaky_relu(tensor=shortcut)
-        shortcut = self._conv(tensor=shortcut, kernel_size=1, out_chan=channels, is_training=is_training,
-                              stride=strides)
+        shortcut=in_tensor
+        if not self.FULL_PREACTIVATION:
+            shortcut = self._conv(tensor=shortcut, kernel_size=1, out_chan=channels, is_training=is_training,
+                                  stride=strides)
+        shortcut = self._batch_normalization(tensor=shortcut, is_training=is_training)
+        if not self.FULL_PREACTIVATION:
+            return shortcut
+        shortcut = self._relu(tensor=shortcut)
+        if self.FULL_PREACTIVATION:
+            shortcut = self._conv(tensor=shortcut, kernel_size=1, out_chan=channels, is_training=is_training,
+                                  stride=strides)
         return shortcut
 
-    def vanilla(self, in_tensor, layer_name, out_chan, first_layer, is_training):
+    def vanilla(self, in_tensor, layer_name, out_chan, first_layer, is_training, depth=None):
         """
         Default building block of a residual network using full pre-activation.
         :param in_tensor: Tensor on which to apply this block on
@@ -595,11 +953,12 @@ class ResNetLayers(BasicLayers):
         :param out_chan: Number of features to extract
         :param first_layer: Is this the first invocation of the block? (increases stride to downsample)
         :param is_training: Is this block in training mode?
+        :param depth: Tuple of (current_depth, total_depth) used for stochastic depth survival rate calculations
         :return: Application of a default residual building block on the input
         """
         with tf.variable_scope(layer_name):
             if first_layer:
-                if out_chan == ResNetLayers.MINIMAL_LAYERS:
+                if out_chan == self.MINIMAL_FEATURES:
                     strides = 1
                 else:
                     strides = 2
@@ -608,10 +967,28 @@ class ResNetLayers(BasicLayers):
                 residual = self._vanilla_branch(in_tensor, out_chan=out_chan, is_training=is_training, strides=strides)
             else:
                 shortcut = in_tensor
-                residual = self._vanilla_branch(in_tensor, out_chan=out_chan, is_training=is_training)
+
+                def branch():
+                    return self._vanilla_branch(in_tensor, out_chan=out_chan, is_training=is_training)
+
+                if depth is None:
+                    residual = branch()
+                else:
+                    survival_rate = ResNetLayers._get_survival_rate(depth)
+                    threshold = tf.random_uniform([], minval=0, maxval=1, dtype=tf.float64)
+
+                    def training():
+                        dims = in_tensor.shape
+                        return tf.cond(tf.greater_equal(survival_rate, threshold), lambda: branch(),
+                                       lambda: tf.zeros([dims[0], out_chan, dims[2], dims[2]]))
+
+                    def inference():
+                        return tf.multiply(branch(), survival_rate)
+
+                    residual = tf.cond(is_training, lambda: training(), lambda: inference())
             return tf.add(residual, shortcut)
 
-    def bottleneck(self, in_tensor, layer_name, out_chan, first_layer, is_training):
+    def bottleneck(self, in_tensor, layer_name, out_chan, first_layer, is_training, depth=None):
         """
         Bottleneck building block of a residual network using full pre-activation.
         :param in_tensor: Tensor on which to apply this block on
@@ -619,11 +996,12 @@ class ResNetLayers(BasicLayers):
         :param out_chan: Number of features to extract
         :param first_layer: Is this the first invocation of the block? (increases stride to downsample)
         :param is_training: Is this block in training mode?
+        :param depth: Tuple of (current_depth, total_depth) used for stochastic depth survival rate calculations
         :return: Application of a bottleneck residual building block on the input
         """
         with tf.variable_scope(layer_name):
             if first_layer:
-                if out_chan == ResNetLayers.MINIMAL_LAYERS:
+                if out_chan == self.MINIMAL_FEATURES:
                     strides = 1
                 else:
                     strides = 2
@@ -633,10 +1011,28 @@ class ResNetLayers(BasicLayers):
                                                    strides=strides)
             else:
                 shortcut = in_tensor
-                residual = self._bottleneck_branch(in_tensor, out_chan=out_chan, is_training=is_training)
+
+                def branch():
+                    return self._bottleneck_branch(in_tensor, out_chan=out_chan, is_training=is_training)
+
+                if depth is None:
+                    residual = branch()
+                else:
+                    survival_rate = ResNetLayers._get_survival_rate(depth)
+                    threshold = tf.random_uniform([], minval=0, maxval=1, dtype=tf.float64)
+
+                    def training():
+                        dims = in_tensor.shape
+                        return tf.cond(tf.greater_equal(survival_rate, threshold), lambda: branch(),
+                                       lambda: tf.zeros([dims[0], 4*out_chan, dims[2], dims[2]]))
+
+                    def inference():
+                        return tf.multiply(branch(), survival_rate)
+
+                    residual = tf.cond(is_training, lambda: training(), lambda: inference())
             return tf.add(residual, shortcut)
 
-    def inception(self, in_tensor, layer_name, out_chan, first_layer, is_training):
+    def inception(self, in_tensor, layer_name, out_chan, first_layer, is_training, depth=None):
         """
         Normal building block of a residual network using full pre-activation and an InceptionNet approach to kernels.
         :param in_tensor: Tensor on which to apply this block on
@@ -644,11 +1040,12 @@ class ResNetLayers(BasicLayers):
         :param out_chan: Number of features to extract
         :param first_layer: Is this the first invocation of the block? (increases stride to downsample)
         :param is_training: Is this block in training mode?
+        :param depth: Tuple of (current_depth, total_depth) used for stochastic depth survival rate calculations
         :return: Application of an InceptionNet based approach to a normal residual building block on the input
         """
         with tf.variable_scope(layer_name):
             if first_layer:
-                if out_chan == ResNetLayers.MINIMAL_LAYERS:
+                if out_chan == self.MINIMAL_FEATURES:
                     strides = 1
                 else:
                     strides = 2
@@ -658,10 +1055,28 @@ class ResNetLayers(BasicLayers):
                                                   strides=strides)
             else:
                 shortcut = in_tensor
-                residual = self._inception_branch(in_tensor, out_chan=out_chan, is_training=is_training)
+
+                def branch():
+                    return self._inception_branch(in_tensor, out_chan=out_chan, is_training=is_training)
+
+                if depth is None:
+                    residual = branch()
+                else:
+                    survival_rate = ResNetLayers._get_survival_rate(depth)
+                    threshold = tf.random_uniform([], minval=0, maxval=1, dtype=tf.float64)
+
+                    def training():
+                        dims = in_tensor.shape
+                        return tf.cond(tf.greater_equal(survival_rate, threshold), lambda: branch(),
+                                       lambda: tf.zeros([dims[0], out_chan, dims[2], dims[2]]))
+
+                    def inference():
+                        return tf.multiply(branch(), survival_rate)
+
+                    residual = tf.cond(is_training, lambda: training(), lambda: inference())
             return tf.add(residual, shortcut)
 
-    def bottleneck_inception(self, in_tensor, layer_name, out_chan, first_layer, is_training):
+    def bottleneck_inception(self, in_tensor, layer_name, out_chan, first_layer, is_training, depth=None):
         """
         Bottleneck building block of a residual network using full pre-activation and an InceptionNet approach to
         kernels.
@@ -670,11 +1085,12 @@ class ResNetLayers(BasicLayers):
         :param out_chan: Number of features to extract
         :param first_layer: Is this the first invocation of the block? (increases stride to downsample)
         :param is_training: Is this block in training mode?
+        :param depth: Tuple of (current_depth, total_depth) used for stochastic depth survival rate calculations
         :return: Application of an InceptionNet based approach to a bottleneck residual building block on the input
         """
         with tf.variable_scope(layer_name):
             if first_layer:
-                if out_chan == ResNetLayers.MINIMAL_LAYERS // 2:
+                if out_chan == self.MINIMAL_FEATURES // 2:
                     strides = 1
                 else:
                     strides = 2
@@ -684,19 +1100,184 @@ class ResNetLayers(BasicLayers):
                                                              strides=strides)
             else:
                 shortcut = in_tensor
-                residual = self._bottleneck_inception_branch(in_tensor, out_chan=out_chan, is_training=is_training)
+
+                def branch():
+                    return self._bottleneck_inception_branch(in_tensor, out_chan=out_chan, is_training=is_training)
+
+                if depth is None:
+                    residual = branch()
+                else:
+                    survival_rate = ResNetLayers._get_survival_rate(depth)
+                    threshold = tf.random_uniform([], minval=0, maxval=1, dtype=tf.float64)
+
+                    def training():
+                        dims = in_tensor.shape
+                        return tf.cond(tf.greater_equal(survival_rate, threshold), lambda: branch(),
+                                       lambda: tf.zeros([dims[0], 4*out_chan, dims[2], dims[2]]))
+
+                    def inference():
+                        return tf.multiply(branch(), survival_rate)
+
+                    residual = tf.cond(is_training, lambda: training(), lambda: inference())
             return tf.add(residual, shortcut)
 
-    def vanilla_dilation(self, in_tensor, layer_name, out_chan, first_layer, is_training):
+    def vanilla_dilation(self, in_tensor, layer_name, out_chan, first_layer, is_training, depth=None):
+        """
+        Modified default building block of a residual network using full pre-activation that doesn't downsample on the
+        first invocation of this block and successive blocks using a dilated 3x3 kernel.
+        :param in_tensor: Tensor on which to apply this block on
+        :param layer_name: Name of this block and related scope
+        :param out_chan: Number of features to extract
+        :param first_layer: Is this the first invocation of the block? (increases stride to downsample)
+        :param is_training: Is this block in training mode?
+        :param depth: Tuple of (current_depth, total_depth) used for stochastic depth survival rate calculations
+        :return: Application of the modified default residual building block on the input
+        """
         with tf.variable_scope(layer_name):
             if first_layer:
-                shortcut = self._shortcut(in_tensor, out_chan=out_chan, is_bottleneck=False, is_training=is_training,
-                                          strides=1)
-                residual = self._vanilla_branch(in_tensor, out_chan=out_chan, is_training=is_training, strides=1,
-                                                dilation=2)
+                shortcut = self._shortcut(in_tensor, out_chan=out_chan, is_bottleneck=False, is_training=is_training)
+                residual = self._vanilla_branch(in_tensor, out_chan=out_chan, is_training=is_training, dilation=2)
             else:
                 shortcut = in_tensor
-                residual = self._vanilla_branch(in_tensor, out_chan=out_chan, is_training=is_training, dilation=2)
+
+                def branch():
+                    return self._vanilla_branch(in_tensor, out_chan=out_chan, is_training=is_training, dilation=2)
+
+                if depth is None:
+                    residual = branch()
+                else:
+                    survival_rate = ResNetLayers._get_survival_rate(depth)
+                    threshold = tf.random_uniform([], minval=0, maxval=1, dtype=tf.float64)
+
+                    def training():
+                        dims = in_tensor.shape
+                        return tf.cond(tf.greater_equal(survival_rate, threshold), lambda: branch(),
+                                       lambda: tf.zeros([dims[0], out_chan, dims[2], dims[2]]))
+
+                    def inference():
+                        return tf.multiply(branch(), survival_rate)
+
+                    residual = tf.cond(is_training, lambda: training(), lambda: inference())
+            return tf.add(residual, shortcut)
+
+    def bottleneck_dilation(self, in_tensor, layer_name, out_chan, first_layer, is_training, depth=None):
+        """
+        Modified bottleneck building block of a residual network using full pre-activation that doesn't downsample on
+        the first invocation of this block and successive blocks using a dilated 3x3 kernel.
+        :param in_tensor: Tensor on which to apply this block on
+        :param layer_name: Name of this block and related scope
+        :param out_chan: Number of features to extract
+        :param first_layer: Is this the first invocation of the block? (increases stride to downsample)
+        :param is_training: Is this block in training mode?
+        :param depth: Tuple of (current_depth, total_depth) used for stochastic depth survival rate calculations
+        :return: Application of the modified bottleneck residual building block on the input
+        """
+        with tf.variable_scope(layer_name):
+            if first_layer:
+                shortcut = self._shortcut(in_tensor, out_chan=out_chan, is_bottleneck=True, is_training=is_training)
+                residual = self._bottleneck_branch(in_tensor, out_chan=out_chan, is_training=is_training, dilation=2)
+            else:
+                shortcut = in_tensor
+
+                def branch():
+                    return self._bottleneck_branch(in_tensor, out_chan=out_chan, is_training=is_training, dilation=2)
+
+                if depth is None:
+                    residual = branch()
+                else:
+                    survival_rate = ResNetLayers._get_survival_rate(depth)
+                    threshold = tf.random_uniform([], minval=0, maxval=1, dtype=tf.float64)
+
+                    def training():
+                        dims = in_tensor.shape
+                        return tf.cond(tf.greater_equal(survival_rate, threshold), lambda: branch(),
+                                       lambda: tf.zeros([dims[0], 4*out_chan, dims[2], dims[2]]))
+
+                    def inference():
+                        return tf.multiply(branch(), survival_rate)
+
+                    residual = tf.cond(is_training, lambda: training(), lambda: inference())
+            return tf.add(residual, shortcut)
+
+    def inception_dilation(self, in_tensor, layer_name, out_chan, first_layer, is_training, depth=None):
+        """
+        Modified default building block of a residual network using full pre-activation and an InceptionNet approach
+        to kernels that doesn't downsample on the first invocation of this block and successive blocks using a dilated
+        3x3 kernel.
+        :param in_tensor: Tensor on which to apply this block on
+        :param layer_name: Name of this block and related scope
+        :param out_chan: Number of features to extract
+        :param first_layer: Is this the first invocation of the block? (increases stride to downsample)
+        :param is_training: Is this block in training mode?
+        :param depth: Tuple of (current_depth, total_depth) used for stochastic depth survival rate calculations
+        :return: Application of the modified default residual building block based on InceptionNet on the input
+        """
+        with tf.variable_scope(layer_name):
+            if first_layer:
+                shortcut = self._shortcut(in_tensor, out_chan=out_chan, is_bottleneck=False, is_training=is_training)
+                residual = self._inception_branch(in_tensor, out_chan=out_chan, is_training=is_training, dilation=2)
+            else:
+                shortcut = in_tensor
+
+                def branch():
+                    return self._inception_branch(in_tensor, out_chan=out_chan, is_training=is_training, dilation=2)
+
+                if depth is None:
+                    residual = branch()
+                else:
+                    survival_rate = ResNetLayers._get_survival_rate(depth)
+                    threshold = tf.random_uniform([], minval=0, maxval=1, dtype=tf.float64)
+
+                    def training():
+                        dims = in_tensor.shape
+                        return tf.cond(tf.greater_equal(survival_rate, threshold), lambda: branch(),
+                                       lambda: tf.zeros([dims[0], out_chan, dims[2], dims[2]]))
+
+                    def inference():
+                        return tf.multiply(branch(), survival_rate)
+
+                    residual = tf.cond(is_training, lambda: training(), lambda: inference())
+            return tf.add(residual, shortcut)
+
+    def bottleneck_inception_dilation(self, in_tensor, layer_name, out_chan, first_layer, is_training, depth=None):
+        """
+        Modified bottleneck building block of a residual network using full pre-activation and an InceptionNet approach
+        to kernels that doesn't downsample on the first invocation of this block and successive blocks using a dilated
+        3x3 kernel.
+        :param in_tensor: Tensor on which to apply this block on
+        :param layer_name: Name of this block and related scope
+        :param out_chan: Number of features to extract
+        :param first_layer: Is this the first invocation of the block? (increases stride to downsample)
+        :param is_training: Is this block in training mode?
+        :param depth: Tuple of (current_depth, total_depth) used for stochastic depth survival rate calculations
+        :return: Application of the modified bottleneck residual building block based on InceptionNet on the input
+        """
+        with tf.variable_scope(layer_name):
+            if first_layer:
+                shortcut = self._shortcut(in_tensor, out_chan=out_chan, is_bottleneck=True, is_training=is_training)
+                residual = self._bottleneck_inception_branch(in_tensor, out_chan=out_chan, is_training=is_training,
+                                                             dilation=2)
+            else:
+                shortcut = in_tensor
+
+                def branch():
+                    return self._bottleneck_inception_branch(in_tensor, out_chan=out_chan, is_training=is_training,
+                                                             dilation=2)
+                if depth is None:
+                    residual = branch()
+                else:
+                    survival_rate = ResNetLayers._get_survival_rate(depth)
+                    threshold = tf.random_uniform([], minval=0, maxval=1, dtype=tf.float64)
+
+                    def training():
+                        dims = in_tensor.shape
+                        return tf.cond(tf.greater_equal(survival_rate, threshold), lambda: branch(),
+                                       lambda: tf.zeros([dims[0], 4*out_chan, dims[2], dims[2]]))
+
+                    def inference():
+                        return tf.multiply(branch(), survival_rate)
+
+                    residual = tf.cond(is_training, lambda: training(), lambda: inference())
             return tf.add(residual, shortcut)
 
 
@@ -729,12 +1310,13 @@ class ImageOps(object):
     @classmethod
     def get_single_heatmap(cls, hand_joints, heatmap_size, gaussian_variance, scale_factor, normalized=False):
         gt_heatmap_np = []
-        # invert_heatmap_np = tf.ones(shape=(heatmap_size, heatmap_size))  # See comment below
+        invert_heatmap_np = tf.ones(shape=(heatmap_size, heatmap_size))  # See comment below
         for j in range(hand_joints.shape[0]):
             cur_joint_heatmap = cls.make_gaussian(heatmap_size,
                                                   gaussian_variance,
                                                   centre=(hand_joints[j] // scale_factor),
                                                   normalized=normalized)
             gt_heatmap_np.append(cur_joint_heatmap)
-            # invert_heatmap_np -= cur_joint_heatmap  # Maybe we should include that but I don't see why; background?
+            invert_heatmap_np -= cur_joint_heatmap  # Maybe we should include that but I don't see why; background?
+        gt_heatmap_np.append(invert_heatmap_np)
         return gt_heatmap_np, 0
