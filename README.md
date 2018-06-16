@@ -99,10 +99,10 @@ python3 ./main-$NETWORK.py
 where `$NETWORK` is one of the four types as explained above.
 
 The commit commits are as follows (please update to current HEAD for a full list):
-  * Inception-ResNet-v2: see current HEAD
-  * ResNet34: 35909b4a296490ab9e06dcb3be3c455bee657461
-  * CPM: 35909b4a296490ab9e06dcb3be3c455bee657461
-  * Inception-v3: see current HEAD
+  * Inception-ResNet-v2: 915ae3f30ca04ecac046fb58cb04d2b372e9bde0
+  * ResNet34: see current HEAD
+  * CPM: see current HEAD
+  * Inception-v3: 915ae3f30ca04ecac046fb58cb04d2b372e9bde0
 
 ## Pretrained Models
 We have decided to further make available the final models of all four networks: You may access them at this link:
