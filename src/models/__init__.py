@@ -9,7 +9,8 @@
 # __all__ = ('ExampleNet', 'VGG16', 'AlexNet', 'MnistNet', 'DenseNet')
 
 from .example import ExampleNet
+from .inception import InceptionNet
 from .cpm import Glover
 from .dressnet import ResNet
 from .inceptionresnet import IncResNet
-__all__ = ('ExampleNet', 'Glover', 'ResNet', 'IncResNet')
+__all__ = ('ExampleNet', 'InceptionNet', 'Glover', 'ResNet', 'IncResNet')
