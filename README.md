@@ -100,8 +100,8 @@ where `$NETWORK` is one of the four types as explained above.
 
 The commit commits are as follows (please update to current HEAD for a full list):
   * Inception-ResNet-v2: 915ae3f30ca04ecac046fb58cb04d2b372e9bde0
-  * ResNet34: see current HEAD
-  * CPM: see current HEAD
+  * ResNet34: 8326e1e8aa0fbe48d078e15674c99e2724432615
+  * CPM: 8326e1e8aa0fbe48d078e15674c99e2724432615
   * Inception-v3: 915ae3f30ca04ecac046fb58cb04d2b372e9bde0
 
 ## Pretrained Models
