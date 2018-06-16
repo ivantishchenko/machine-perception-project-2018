@@ -105,8 +105,10 @@ The commits are as follows (please update to current HEAD for a full list):
   * Inception-v3: 915ae3f30ca04ecac046fb58cb04d2b372e9bde0
 
 ## Pretrained Models
-We have decided to further make available the final models of all four networks: You may access them at this link:
-[]
+We have decided to further make available the final models of all four networks. You may access them at this link:
+[https://polybox.ethz.ch/index.php/s/gV7K6Z7UTLNpzdK]
+We would like to note that Inception-ResNet-v2 is trained for 1 more epoch than presented in the paper.
+
 
 ## Report
 The report including source files is in `./report`. We publish this work using the Attribution-NonCommercial-ShareAlike
