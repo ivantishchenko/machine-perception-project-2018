@@ -23,7 +23,7 @@ to our needs.
 ![CPM Image 4](https://github.com/ivantishchenko/machine-perception-project-2018/raw/master/plots/img/sub/cpm3.png "CPM Prediction 4")
 ![CPM Image 5](https://github.com/ivantishchenko/machine-perception-project-2018/raw/master/plots/img/sub/cpm4.png "CPM Prediction 5")
 
-### Inception-ResNet-v2
+### ResNet34
 ![ResNet34 Image 1](https://github.com/ivantishchenko/machine-perception-project-2018/raw/master/plots/img/sub/resnet0.png "ResNet34 Prediction 1")
 ![ResNet34 Image 2](https://github.com/ivantishchenko/machine-perception-project-2018/raw/master/plots/img/sub/resnet1.png "ResNet34 Prediction 2")
 ![ResNet34 Image 3](https://github.com/ivantishchenko/machine-perception-project-2018/raw/master/plots/img/sub/resnet2.png "ResNet34 Prediction 3")
@@ -90,8 +90,8 @@ We have the following selection of networks for quick training:
 
 All networks are called with their own `main-*.py` file in `./src`. Their source code can be found in `./src/models/*`
 
-We created for each network their own git commit to set up the training pipeline such that training should be as easy
-as:
+As we experimented with different training pipelines (mainly image augmentation) we prepared git commits which reflect
+the whole state of the repository. Checkout the repository to one of the following commits execute then:
 ```
 cd src
 python3 ./main-$NETWORK.py
@@ -100,8 +100,8 @@ where `$NETWORK` is one of the four types as explained above.
 
 The commit commits are as follows (please update to current HEAD for a full list):
   * Inception-ResNet-v2: see current HEAD
-  * ResNet34: see current HEAD
-  * CPM: see current HEAD
+  * ResNet34: 35909b4a296490ab9e06dcb3be3c455bee657461
+  * CPM: 35909b4a296490ab9e06dcb3be3c455bee657461
   * Inception-v3: see current HEAD
 
 ## Pretrained Models
